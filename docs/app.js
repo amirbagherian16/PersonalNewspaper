@@ -1,4 +1,4 @@
-const TABS=[['today','Today','📰'],['groups','Groups','👥'],['funding','Funding','💰'],['brainstorm','Brainstorm','💡'],['background','Background','📚'],['dataset','Dataset','🗂']];
+const TABS=[['today','Today','📰'],['groups','Groups','👥'],['funding','Funding','💰'],['brainstorm','Brainstorm','💡'],['saved','Saved','⭐'],['background','Background','📚'],['dataset','Dataset','🗂']];
 const SEC={contact_sport:'Contact sport',biomechanics_modeling:'Biomechanics & modeling',blast_military:'Blast & military',medical_clinical:'Medical & clinical',general_tbi:'General TBI'};
 const TYPE={paper:'Paper',preprint:'Preprint',news:'News',linkedin:'LinkedIn',social:'Social',github:'GitHub',grant:'Grant award',opportunity:'Open call',funding_news:'Funding news'};
 const FEED_TYPES=['paper','preprint','news','funding_news','linkedin','social','github'];
@@ -25,14 +25,37 @@ function art(sec,seed){const c=COL[sec]||COL.general_tbi,h=hash(seed||sec),a=(h%
 document.addEventListener('error',e=>{const t=e.target;if(t.tagName==='IMG'&&t.dataset.sec&&!t.dataset.fb){t.dataset.fb=1;t.removeAttribute('referrerpolicy');t.src=art(t.dataset.sec,t.dataset.seed)}},true);
 const img=(i,cls='thumb')=>`<img class="${cls}" loading="lazy" referrerpolicy="no-referrer" alt="" data-sec="${esc(i.section)}" data-seed="${esc(i.title)}" src="${esc(i.img&&/^https?:/.test(i.img)?i.img:art(i.section,i.title))}">`;
 
+
+/* ---------- saved + seen state (kept in this browser) ---------- */
+const UK='tbi_user_v1';let U={seen:{},saved:{},folders:['Read later','Cite','Ideas','Funding'],base:''},IDX={},REDRAW=null;
+const loadU=()=>{try{const o=JSON.parse(store.get(UK)||'null');if(o)U={...U,...o,seen:o.seen||{},saved:o.saved||{},folders:o.folders&&o.folders.length?o.folders:U.folders}}catch(e){}};
+const saveU=()=>store.set(UK,JSON.stringify(U));
+const getItem=id=>IDX[id]||(U.saved[id]||{}).item;
+const isNew=i=>U.seen[i.id]===1?false:U.seen[i.id]===0?true:i.first_seen>=U.base;
+function acts(i){const sv=!!U.saved[i.id];return `<span class="acts"><button class="act star ${sv?'on':''}" data-a="star" data-id="${esc(i.id)}" title="Save for later">${sv?'★ Saved':'☆ Save'}</button><button class="act eye" data-a="eye" data-id="${esc(i.id)}" title="Mark seen / unseen">${isNew(i)?'● New':'✓ Seen'}</button></span>`}
+function badges(){if(!D)return;const n=D.items.filter(i=>!NOFEED.includes(i.source_type)&&isNew(i)).length,sv=Object.keys(U.saved).length;
+ document.querySelectorAll('[data-b="today"]').forEach(e=>e.textContent=n?(n>99?'99+':n):'');document.querySelectorAll('[data-b="saved"]').forEach(e=>e.textContent=sv||'');
+ const nu=$('#nu');if(nu)nu.textContent=n;const ns=$('#ns');if(ns)ns.textContent=sv}
+function sync(id){const it=getItem(id);if(!it)return;const nw=isNew(it),sv=!!U.saved[id];
+ document.querySelectorAll('[data-id]').forEach(el=>{if(el.dataset.id!==id)return;
+  if(el.classList.contains('card')||el.classList.contains('mini'))el.classList.toggle('unseen',nw);
+  if(el.dataset.a==='star'){el.classList.toggle('on',sv);el.textContent=sv?'★ Saved':'☆ Save'}
+  if(el.dataset.a==='eye')el.textContent=nw?'● New':'✓ Seen'});badges()}
+function markSeen(id,v){U.seen[id]=v?1:0;saveU();sync(id)}
+function toggleSave(id){const it=getItem(id);if(!it)return;if(U.saved[id])delete U.saved[id];else U.saved[id]={t:Date.now(),f:U.folders[0],item:it};saveU();sync(id);REDRAW&&REDRAW()}
+document.addEventListener('click',e=>{const b=e.target.closest('.act');
+ if(b){e.preventDefault();const id=b.dataset.id,it=getItem(id);if(b.dataset.a==='star')toggleSave(id);else if(it)markSeen(id,isNew(it));return}
+ const a=e.target.closest('a[target=_blank]'),c=a&&a.closest('[data-id]');if(c){const it=getItem(c.dataset.id);if(it&&isNew(it))markSeen(c.dataset.id,true)}});
+document.addEventListener('auxclick',e=>{const a=e.target.closest('a[target=_blank]'),c=a&&a.closest('[data-id]');if(c){const it=getItem(c.dataset.id);if(it&&isNew(it))markSeen(c.dataset.id,true)}});
+
 /* ---------- cards ---------- */
 function chips(i){return `<span class="chip sec" style="--c:var(--s-${i.section})">${esc(SEC[i.section]||i.section)}</span><span class="chip">${esc(TYPE[i.source_type]||i.source_type)}</span>`+
  i.groups.map(g=>`<span class="chip ${(D.groups.find(x=>x.id===g)||{}).mine?'mine':'g'}">${esc(gname(g).split(/ [-(]/)[0])}</span>`).join('')+
  i.tags.slice(0,3).map(t=>`<span class="chip">${esc(t)}</span>`).join('')+i.sports.slice(0,2).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
 const link=i=>`<a href="${esc(safe(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a>`;
-function card(i,lead){const body=`<div class="body"><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}</div>${i.summary?`<p class="sum">${esc(i.summary)}</p>`:''}<div>${chips(i)}</div></div>`;
- return lead?`<div class="card lead">${img(i)}${body}</div>`:`<div class="card">${body}${img(i)}</div>`}
-const mini=i=>`<div class="mini">${img(i,'')}<div><a href="${esc(safe(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a><div class="meta">${esc(i.outlet)} · ${esc(i.date)}</div></div></div>`;
+function card(i,lead){const body=`<div class="body"><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}</div>${i.summary?`<p class="sum">${esc(i.summary)}</p>`:''}<div>${chips(i)}</div>${acts(i)}</div>`,u=isNew(i)?' unseen':'';
+ return lead?`<div class="card lead${u}" data-id="${esc(i.id)}">${img(i)}${body}</div>`:`<div class="card${u}" data-id="${esc(i.id)}">${body}${img(i)}</div>`}
+const mini=i=>`<div class="mini${isNew(i)?' unseen':''}" data-id="${esc(i.id)}">${img(i,'')}<div><a href="${esc(safe(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a><div class="meta">${esc(i.outlet)} · ${esc(i.date)}</div></div></div>`;
 
 /* ---------- shared stats (topic co-occurrence, rising topics, white-space gaps) ---------- */
 let ST=null;const K=(a,b)=>a<b?a+'|'+b:b+'|'+a;
@@ -62,7 +85,7 @@ function mapNodes(items,max){ /* compact topic map: 5 section hubs + top topics 
  return{nodes,links}}
 
 /* ---------- TODAY ---------- */
-const S={q:'',sec:'',type:'',day:'',grp:'',tag:''};
+const S={q:'',sec:'',type:'',day:'',grp:'',tag:'',unseen:false,fav:false,group:''};
 function today(){
  const items=D.items.filter(i=>!NOFEED.includes(i.source_type));const days=[...new Set(items.map(i=>i.first_seen))].sort().reverse().slice(0,21);
  if(!S.day&&S.day!=='all')S.day=days[0]||'all';
@@ -71,10 +94,12 @@ function today(){
   <select id="fd">${days.map(d=>`<option value="${d}" ${S.day===d?'selected':''}>${d}${d===D.today?' (today)':''}</option>`).join('')}<option value="all" ${S.day==='all'?'selected':''}>All days</option></select>
   <select id="fs"><option value="">All sources</option>${FEED_TYPES.map(k=>`<option value="${k}" ${S.type===k?'selected':''}>${TYPE[k]}</option>`).join('')}</select>
   <select id="fg"><option value="">All groups</option>${D.groups.map(g=>`<option value="${g.id}" ${S.grp===g.id?'selected':''}>${esc(gshort(g))}</option>`).join('')}</select>
+  <select id="fv"><option value="">Group: none</option><option value="sec" ${S.group==='sec'?'selected':''}>Group: section</option><option value="type" ${S.group==='type'?'selected':''}>Group: source</option></select>
+  <button class="pill" id="tu" title="Only stories you have not opened">● New <b id="nu"></b></button><button class="pill" id="tf" title="Only stories you saved">★ Saved <b id="ns"></b></button><button class="pill" id="tm" title="Mark every story as seen">✓ Mark all seen</button>
   <div class="pills" id="pills"></div><span id="atag"></span><span class="meta" id="ct"></span></div>
  <div class="cols today"><section class="panel scrollpanel"><div class="scroll" id="feed"></div></section>
  <aside class="panel"><h3>Dashboard</h3><div class="scroll" id="rail"></div></aside></div></div>`;
- const base=()=>items.filter(i=>(S.day==='all'||i.first_seen===S.day)&&(!S.q||(i.title+' '+i.summary).toLowerCase().includes(S.q.toLowerCase())));
+ const base=()=>items.filter(i=>(S.day==='all'||i.first_seen===S.day)&&(!S.q||(i.title+' '+i.summary).toLowerCase().includes(S.q.toLowerCase()))&&(!S.unseen||isNew(i))&&(!S.fav||U.saved[i.id]));
  const pills=()=>{const b=base().filter(i=>(!S.type||i.source_type===S.type)&&(!S.grp||i.groups.includes(S.grp))&&(!S.tag||i.tags.includes(S.tag)));
   $('#pills').innerHTML=`<button class="pill ${!S.sec?'on':''}" data-v="">All <b>${b.length}</b></button>`+Object.entries(SEC).map(([k,v])=>`<button class="pill ${S.sec===k?'on':''}" data-v="${k}" style="--c:var(--s-${k})"><i class="dot"></i>${v} <b>${b.filter(i=>i.section===k).length}</b></button>`).join('');
   $('#pills').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{S.sec=p.dataset.v;feed();pills()});
@@ -82,9 +107,16 @@ function today(){
  const feed=()=>{const r=base().filter(i=>(!S.sec||i.section===S.sec)&&(!S.type||i.source_type===S.type)&&(!S.grp||i.groups.includes(S.grp))&&(!S.tag||i.tags.includes(S.tag)));
   $('#ct').textContent=`${r.length} stories`;const li=r.findIndex(i=>i.img);
   const ord=li>0?[r[li],...r.filter((_,k)=>k!==li)]:r;
-  $('#feed').innerHTML=r.length?`<div class="feedgrid">${ord.slice(0,200).map((i,k)=>card(i,k===0&&i.img)).join('')}</div>`:'<p class="empty">Nothing matches. Try another day or clear a filter.</p>';$('#feed').scrollTop=0};
+  let html;
+  if(S.group&&r.length){const kf=i=>S.group==='sec'?i.section:i.source_type,lab=k=>S.group==='sec'?SEC[k]:TYPE[k],m={};r.forEach(i=>(m[kf(i)]=m[kf(i)]||[]).push(i));
+   html=Object.entries(m).sort((x,y)=>y[1].length-x[1].length).map(([k,a])=>`<h4 class="gh" style="--c:var(--s-${k},var(--mut))"><i class="dot"></i>${esc(lab(k)||k)} <b>${a.length}</b><span class="ghn">${a.filter(isNew).length?a.filter(isNew).length+' new':''}</span></h4><div class="feedgrid">${a.slice(0,60).map(i=>card(i)).join('')}</div>`).join('')}
+  else html=r.length?`<div class="feedgrid">${ord.slice(0,200).map((i,k)=>card(i,k===0&&i.img)).join('')}</div>`:'<p class="empty">Nothing matches. Try another day or clear a filter.</p>';
+  $('#feed').innerHTML=html;$('#feed').scrollTop=0};
  $('#q').oninput=e=>{S.q=e.target.value;feed();pills()};
- $('#fd').onchange=e=>{S.day=e.target.value;feed();pills()};$('#fs').onchange=e=>{S.type=e.target.value;feed();pills()};$('#fg').onchange=e=>{S.grp=e.target.value;feed();pills()};
+ $('#fd').onchange=e=>{S.day=e.target.value;feed();pills()};$('#fs').onchange=e=>{S.type=e.target.value;feed();pills()};$('#fg').onchange=e=>{S.grp=e.target.value;feed();pills()};$('#fv').onchange=e=>{S.group=e.target.value;feed()};
+ const tb=()=>{$('#tu').classList.toggle('on',S.unseen);$('#tf').classList.toggle('on',S.fav)};tb();
+ $('#tu').onclick=()=>{S.unseen=!S.unseen;tb();feed();pills()};$('#tf').onclick=()=>{S.fav=!S.fav;tb();feed();pills()};
+ $('#tm').onclick=()=>{D.items.forEach(i=>{if(isNew(i))U.seen[i.id]=1});saveU();feed();pills();badges()};
  const s=D.signals,dd=s.by_day.slice(-14),mx=Math.max(...dd.map(d=>d[1]),1);
  const gi=items.filter(i=>i.groups.length&&i.source_type!=='github').sort((a,b)=>(isMine(b)-isMine(a))||b.date.localeCompare(a.date)).slice(0,5);
  $('#rail').innerHTML=`<div class="row"><div class="stat"><b>${D.new_today}</b><span>new today</span></div><div class="stat"><b>${D.total_items}</b><span>in dataset</span></div></div>
@@ -95,7 +127,7 @@ function today(){
  $('#rail').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tag=b.dataset.t;feed();pills()});
  const mn=mapNodes(items.filter(i=>S.day==='all'||i.first_seen===S.day).length>20?items.filter(i=>S.day==='all'||i.first_seen===S.day):items,12);
  netgraph($('#rg'),{...mn,len:46,repel:1500,onSelect:n=>{if(!n){S.tag='';S.sec='';}else if(n.kind==='tag'){S.tag=n.key;S.sec=''}else{S.sec=n.key;S.tag=''}feed();pills()}});
- pills();feed()}
+ pills();feed();badges()}
 
 /* ---------- GROUPS ---------- */
 let GSEL=null;
@@ -121,8 +153,8 @@ function groups(){GSEL=GSEL||D.groups[0].id;
 /* ---------- FUNDING ---------- */
 const FS={q:'',mine:false,tag:'',grp:'',map:true};
 function fcard(i){const m=i.summary.split(' | ');const amt=(m.find(x=>/^\$/.test(x))||'');
- return `<div class="card noimg"><div><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}${i.deadline?` · <b>closes ${esc(i.deadline)}</b>`:''}</div>
- <p class="sum">${esc(i.source_type==='grant'?m.slice(0,3).join(' · '):i.summary)}</p><div>${amt?`<span class="chip mine">${esc(amt)}</span>`:''}${i.groups.map(g=>`<span class="chip ${(D.groups.find(x=>x.id===g)||{}).mine?'mine':'g'}">${esc(gname(g).split(/ [-(]/)[0])}</span>`).join('')}<span class="chip">${esc(TYPE[i.source_type])}</span></div></div></div>`}
+ return `<div class="card noimg${isNew(i)?' unseen':''}" data-id="${esc(i.id)}"><div><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}${i.deadline?` · <b>closes ${esc(i.deadline)}</b>`:''}</div>
+ <p class="sum">${esc(i.source_type==='grant'?m.slice(0,3).join(' · '):i.summary)}</p><div>${amt?`<span class="chip mine">${esc(amt)}</span>`:''}${i.groups.map(g=>`<span class="chip ${(D.groups.find(x=>x.id===g)||{}).mine?'mine':'g'}">${esc(gname(g).split(/ [-(]/)[0])}</span>`).join('')}<span class="chip">${esc(TYPE[i.source_type])}</span></div>${acts(i)}</div></div>`}
 function funding(){
  $('#main').innerHTML=`<div class="page"><section class="panel fgraph ${FS.map?'':'shut'}"><h3><span>Funding map <span class="hint">calls, awards and news linked to topics and groups · click a dot to filter</span></span><button class="chip x" id="fgt">${FS.map?'Hide':'Show'}</button></h3><div class="gbox short" id="fgm"></div></section>
  <div class="cols three"><section class="panel scrollpanel"><h3><span id="c1"></span><span class="meta">grants.gov</span></h3><div class="fbar" id="fbar"></div><div class="scroll" id="f1"></div></section>
@@ -204,6 +236,27 @@ function brainstorm(){const st=ST;
  document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{BTAB=b.dataset.t;ib()});
  lay();build();ib()}
 
+/* ---------- SAVED ---------- */
+let SV={f:'',sec:''};
+function saved(){
+ $('#main').innerHTML=`<div class="cols two"><section class="panel filters"><h3>Saved</h3><div class="scroll" id="sl"></div></section><section class="panel scrollpanel"><h3><span id="st2"></span><span class="meta">kept in this browser · export to back up</span></h3><div class="scroll" id="sd"></div></section></div>`;
+ const draw=()=>{const A=Object.entries(U.saved).map(([id,v])=>({...v,id})),F=U.folders;if(SV.f&&!F.includes(SV.f))SV.f='';
+  const inF=A.filter(x=>!SV.f||x.f===SV.f);
+  $('#sl').innerHTML=`<div class="sec"><h4>Folders</h4><button class="fbtn ${!SV.f?'on':''}" data-f="">All saved<span class="n">${A.length}</span></button>${F.map(f=>`<button class="fbtn ${SV.f===f?'on':''}" data-f="${esc(f)}">${esc(f)}<span class="n">${A.filter(x=>x.f===f).length}</span></button>`).join('')}
+   <button class="chip x" id="nf">+ New folder</button>${SV.f&&SV.f!==F[0]?`<button class="chip x" id="df">Delete “${esc(SV.f)}”</button>`:''}</div>
+   <div class="sec"><h4>Topic</h4><button class="fbtn ${!SV.sec?'on':''}" data-s="">All topics</button>${Object.entries(SEC).map(([k,v])=>`<button class="fbtn ${SV.sec===k?'on':''}" data-s="${k}"><span><i class="dot" style="background:var(--s-${k})"></i>${v}</span><span class="n">${inF.filter(x=>x.item.section===k).length}</span></button>`).join('')}</div>
+   <div class="sec"><h4>Backup</h4><p class="meta">Saved stories live only in this browser. Export a file to move them to another device.</p><button class="btn" id="ex" style="border:0;cursor:pointer">Export</button><label class="btn" style="cursor:pointer">Import<input type="file" id="im" accept=".json" hidden></label></div>`;
+  $('#sl').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{SV.f=b.dataset.f;draw()});$('#sl').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{SV.sec=b.dataset.s;draw()});
+  $('#nf').onclick=()=>{const n=(prompt('New folder name')||'').trim();if(n&&!U.folders.includes(n)){U.folders.push(n);saveU();SV.f=n;draw()}};
+  if($('#df'))$('#df').onclick=()=>{if(confirm(`Delete folder “${SV.f}”? Its stories move to “${F[0]}”.`)){Object.values(U.saved).forEach(v=>{if(v.f===SV.f)v.f=F[0]});U.folders=F.filter(f=>f!==SV.f);saveU();SV.f='';draw()}};
+  $('#ex').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({saved:U.saved,folders:U.folders,seen:U.seen,base:U.base})],{type:'application/json'}));a.download='tbi_saved.json';a.click()};
+  $('#im').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);Object.entries(o.saved||{}).forEach(([k,v])=>{if(!U.saved[k]||v.t>U.saved[k].t)U.saved[k]=v});(o.folders||[]).forEach(x=>{if(!U.folders.includes(x))U.folders.push(x)});Object.entries(o.seen||{}).forEach(([k,v])=>{if(U.seen[k]===undefined)U.seen[k]=v});Object.values(U.saved).forEach(v=>{if(!U.folders.includes(v.f))v.f=U.folders[0]});saveU();draw();badges()}catch(x){alert('Not a valid export file.')}})};
+  const L=inF.filter(x=>!SV.sec||x.item.section===SV.sec).sort((a,b)=>b.t-a.t);
+  $('#st2').textContent=`${SV.f||'All saved'} · ${L.length}`;
+  $('#sd').innerHTML=L.length?`<div class="feedgrid">${L.map(x=>`<div class="svitem">${card(x.item)}<div class="svbar"><label class="meta">Folder <select class="fsel" data-id="${esc(x.id)}">${U.folders.map(f=>`<option ${f===x.f?'selected':''}>${esc(f)}</option>`).join('')}</select></label><span class="meta">saved ${new Date(x.t).toLocaleDateString()}</span></div></div>`).join('')}</div>`:'<p class="empty">Nothing here yet. Click ☆ Save on any story and it shows up in this tab.</p>';
+  $('#sd').querySelectorAll('.fsel').forEach(sel=>sel.onchange=()=>{U.saved[sel.dataset.id].f=sel.value;saveU();draw()})};
+ REDRAW=draw;draw();badges()}
+
 /* ---------- BACKGROUND ---------- */
 function background(){$('#main').innerHTML=`<div class="cols two"><section class="panel filters"><h3>Contents</h3><div class="scroll toc">${BG.map((s,k)=>`<a href="#background" data-k="${k}">${esc(s.title)}</a>`).join('')}</div></section><section class="panel scrollpanel"><h3>Background</h3><div class="scroll" id="bgc">${BG.map((s,k)=>`<div class="sec" id="bg${k}"><h4>${esc(s.title)}</h4>${s.entries.map(e=>`<div class="card noimg"><div class="bgentry" style="margin:0"><h4>${e.url?`<a href="${esc(safe(e.url))}" target="_blank" rel="noopener">${esc(e.title)} ↗</a>`:esc(e.title)}</h4><p>${esc(e.body)}</p></div></div>`).join('')}</div>`).join('')}</div></section></div>`;
  document.querySelectorAll('.toc a').forEach(a=>a.onclick=e=>{e.preventDefault();$('#bg'+a.dataset.k).scrollIntoView({behavior:'smooth',block:'start'})})}
@@ -220,7 +273,7 @@ function dataset(){const rows=D.items;const c=k=>Object.entries(rows.reduce((a,i
  stackbars($('#tl'),ds.map(d=>({label:d,parts:secs.map(k=>[by[d][k]||0,`var(--s-${k})`,SEC[k]])})),{h:150})}
 
 /* ---------- boot ---------- */
-function route(){const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v,ic])=>`<a href="#${k}" class="${k===h?'on':''}"><span class="ic">${ic}</span><span class="tx">${v}</span></a>`).join('');({today,groups,funding,brainstorm,background,dataset}[h]||today)()}
+function route(){REDRAW=null;const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v,ic])=>`<a href="#${k}" class="${k===h?'on':''}"><span class="ic">${ic}</span><span class="tx">${v}</span>${k==='today'||k==='saved'?`<span class="bd" data-b="${k}"></span>`:''}</a>`).join('');badges();({today,groups,funding,brainstorm,saved,background,dataset}[h]||today)()}
 $('#theme').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;const n=dark?'light':'dark';r.dataset.theme=n;store.set('theme',n)};
 /* ---------- password gate (data is AES-256-GCM encrypted; decrypted in this browser only) ---------- */
 const b64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
@@ -229,7 +282,7 @@ async function decryptBundle(text,pw){const o=JSON.parse(text);
  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(o.salt),iterations:o.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(o.iv)},key,b64(o.ct));
  return JSON.parse(new TextDecoder().decode(pt))}
-function start(b){D=b.latest;buildStats();IDEAS=b.ideas;BG=b.background;DL={csv:b.csv,jsonl:b.jsonl};
+function start(b){D=b.latest;buildStats();IDX=Object.fromEntries(D.items.map(i=>[i.id,i]));loadU();if(!U.base){U.base=D.today;saveU()}Object.keys(U.seen).forEach(k=>{if(!IDX[k]&&!U.saved[k])delete U.seen[k]});IDEAS=b.ideas;BG=b.background;DL={csv:b.csv,jsonl:b.jsonl};
  $('#sub').textContent=`Updated ${D.generated} · ${D.new_today} new today`;$('#nav').style.visibility='visible';$('#lock').hidden=false;route();addEventListener('hashchange',route);let rw=innerWidth,rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(Math.abs(innerWidth-rw)>40){rw=innerWidth;route()}},300)})}
 function gate(text){
  const saved=store.get('pw')||(()=>{try{return sessionStorage.getItem('pw')}catch(e){return null}})();
