@@ -86,19 +86,21 @@ function fcard(i){const m=i.summary.split(' | ');const amt=(m.find(x=>/^\$/.test
  return `<div class="card noimg"><div><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}${i.deadline?` · <b>closes ${esc(i.deadline)}</b>`:''}</div>
  <p class="sum">${esc(i.source_type==='grant'?m.slice(0,3).join(' · '):i.summary)}</p><div>${amt?`<span class="chip mine">${esc(amt)}</span>`:''}${i.groups.map(g=>`<span class="chip ${(D.groups.find(x=>x.id===g)||{}).mine?'mine':'g'}">${esc(gname(g).split(/ [-(]/)[0])}</span>`).join('')}<span class="chip">${esc(TYPE[i.source_type])}</span></div></div></div>`}
 function funding(){
- $('#main').innerHTML=`<div class="cols three"><section class="panel scrollpanel"><h3><span id="c1"></span><span class="meta">grants.gov</span></h3><div class="scroll" id="f1"></div></section>
+ $('#main').innerHTML=`<div class="cols three"><section class="panel scrollpanel"><h3><span id="c1"></span><span class="meta">grants.gov</span></h3><div class="fbar" id="fbar"></div><div class="scroll" id="f1"></div></section>
  <section class="panel scrollpanel"><h3><span id="c2"></span><span class="meta">NIH RePORTER · NSF</span></h3><div class="scroll" id="f2"></div></section>
  <section class="panel scrollpanel"><h3><span id="c3"></span><span class="meta">news</span></h3><div class="scroll" id="f3"></div></section></div>`;
- const bar=`<div style="display:flex;gap:8px"><input type="search" id="fq" placeholder="Search funding…" value="${esc(FS.q)}"><button class="iconbtn" id="fm" style="width:auto;padding:0 12px;height:36px;font-size:12px;${FS.mine?'background:var(--acc);color:var(--acc-fg)':''}" title="Only your lab and tracked groups">Groups</button></div>`;
+ $('#fbar').innerHTML=`<input type="search" id="fq" placeholder="Search funding…" value="${esc(FS.q)}" style="margin:0"><button class="iconbtn" id="fm" style="width:auto;padding:0 12px;height:36px;font-size:12px" title="Only your lab and tracked groups">Groups</button>`;
  const draw=()=>{const ok=i=>(!FS.q||(i.title+' '+i.summary).toLowerCase().includes(FS.q.toLowerCase()))&&(!FS.mine||i.groups.length);
   const f=t=>D.items.filter(i=>i.source_type===t&&ok(i)).sort((a,b)=>(isMine(b)-isMine(a))||b.date.localeCompare(a.date));
   const o=f('opportunity').sort((a,b)=>(a.deadline||'9999').localeCompare(b.deadline||'9999')),g=f('grant'),n=f('funding_news');
   $('#c1').textContent=`Open calls (${o.length})`;$('#c2').textContent=`Recent awards (${g.length})`;$('#c3').textContent=`Wins & funding news (${n.length})`;
-  $('#f1').innerHTML=bar+(o.length?o.slice(0,80).map(fcard).join(''):'<p class="empty">No open calls found.</p>');
+  $('#f1').innerHTML=(o.length?o.slice(0,80).map(fcard).join(''):'<p class="empty">No open calls found.</p>');
   $('#f2').innerHTML=g.length?g.slice(0,120).map(fcard).join(''):'<p class="empty">No awards found.</p>';
   $('#f3').innerHTML=n.length?n.slice(0,60).map(i=>card(i)).join(''):'<p class="empty">No funding news yet.</p>';
-  $('#fq').oninput=e=>{FS.q=e.target.value;const p=e.target.selectionStart;draw();$('#fq').focus();$('#fq').setSelectionRange(p,p)};
-  $('#fm').onclick=()=>{FS.mine=!FS.mine;draw()}};
+ };
+ const tog=()=>{$('#fm').style.cssText+=FS.mine?';background:var(--acc);color:var(--acc-fg)':';background:var(--card);color:var(--fg)'};
+ $('#fq').oninput=e=>{FS.q=e.target.value;draw()};
+ $('#fm').onclick=()=>{FS.mine=!FS.mine;tog();draw()};tog();
  draw()}
 
 /* ---------- BRAINSTORM ---------- */

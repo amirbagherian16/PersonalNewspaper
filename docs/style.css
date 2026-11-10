@@ -71,3 +71,5 @@ footer{font-size:11px;color:var(--mut);text-align:center;padding:4px 8px 8px}
   .card{grid-template-columns:minmax(0,1fr) 92px}.thumb{width:92px;height:72px}.top{position:sticky;top:0;z-index:5}
   .brand{font-size:21px}.scrollpanel .scroll{max-height:none}
 }
+
+.fbar{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--panel)}.fbar input{flex:1}
