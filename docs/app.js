@@ -27,7 +27,7 @@ const img=(i,cls='thumb')=>`<img class="${cls}" loading="lazy" referrerpolicy="n
 
 
 /* ---------- saved + seen state (kept in this browser) ---------- */
-const UK='tbi_user_v1';let U={seen:{},saved:{},folders:['Read later','Cite','Ideas','Funding'],base:''},IDX={},REDRAW=null;
+const UK='tbi_user_v1';let U={seen:{},saved:{},folders:['Read later','Cite','Ideas','Funding'],base:''},IDX={},REDRAW=null,RESORT=null;
 const loadU=()=>{try{const o=JSON.parse(store.get(UK)||'null');if(o)U={...U,...o,seen:o.seen||{},saved:o.saved||{},folders:o.folders&&o.folders.length?o.folders:U.folders}}catch(e){}};
 const saveU=()=>store.set(UK,JSON.stringify(U));
 const getItem=id=>IDX[id]||(U.saved[id]||{}).item;
@@ -41,7 +41,7 @@ function sync(id){const it=getItem(id);if(!it)return;const nw=isNew(it),sv=!!U.s
   if(el.classList.contains('card')||el.classList.contains('mini'))el.classList.toggle('unseen',nw);
   if(el.dataset.a==='star'){el.classList.toggle('on',sv);el.textContent=sv?'★ Saved':'☆ Save'}
   if(el.dataset.a==='eye')el.textContent=nw?'● New':'✓ Seen'});badges()}
-function markSeen(id,v){U.seen[id]=v?1:0;saveU();sync(id)}
+function markSeen(id,v){U.seen[id]=v?1:0;saveU();sync(id);RESORT&&RESORT(id,!v)}
 function toggleSave(id){const it=getItem(id);if(!it)return;if(U.saved[id])delete U.saved[id];else U.saved[id]={t:Date.now(),f:U.folders[0],item:it};saveU();sync(id);REDRAW&&REDRAW()}
 document.addEventListener('click',e=>{const b=e.target.closest('.act');
  if(b){e.preventDefault();const id=b.dataset.id,it=getItem(id);if(b.dataset.a==='star')toggleSave(id);else if(it)markSeen(id,isNew(it));return}
@@ -104,7 +104,7 @@ function today(){
   $('#pills').innerHTML=`<button class="pill ${!S.sec?'on':''}" data-v="">All <b>${b.length}</b></button>`+Object.entries(SEC).map(([k,v])=>`<button class="pill ${S.sec===k?'on':''}" data-v="${k}" style="--c:var(--s-${k})"><i class="dot"></i>${v} <b>${b.filter(i=>i.section===k).length}</b></button>`).join('');
   $('#pills').querySelectorAll('.pill').forEach(p=>p.onclick=()=>{S.sec=p.dataset.v;feed();pills()});
   $('#atag').innerHTML=S.tag?`<button class="chip x" id="xt">${esc(S.tag)} ✕</button>`:'';if(S.tag)$('#xt').onclick=()=>{S.tag='';feed();pills()}};
- const feed=()=>{const r=base().filter(i=>(!S.sec||i.section===S.sec)&&(!S.type||i.source_type===S.type)&&(!S.grp||i.groups.includes(S.grp))&&(!S.tag||i.tags.includes(S.tag)));
+ const feed=()=>{const r=base().sort((a,b)=>isNew(b)-isNew(a)).filter(i=>(!S.sec||i.section===S.sec)&&(!S.type||i.source_type===S.type)&&(!S.grp||i.groups.includes(S.grp))&&(!S.tag||i.tags.includes(S.tag)));
   $('#ct').textContent=`${r.length} stories`;const li=r.findIndex(i=>i.img);
   const ord=li>0?[r[li],...r.filter((_,k)=>k!==li)]:r;
   let html;
@@ -116,6 +116,9 @@ function today(){
  $('#fd').onchange=e=>{S.day=e.target.value;feed();pills()};$('#fs').onchange=e=>{S.type=e.target.value;feed();pills()};$('#fg').onchange=e=>{S.grp=e.target.value;feed();pills()};$('#fv').onchange=e=>{S.group=e.target.value;feed()};
  const tb=()=>{$('#tu').classList.toggle('on',S.unseen);$('#tf').classList.toggle('on',S.fav)};tb();
  $('#tu').onclick=()=>{S.unseen=!S.unseen;tb();feed();pills()};$('#tf').onclick=()=>{S.fav=!S.fav;tb();feed();pills()};
+ RESORT=(id,nw)=>{const el=$('#feed .card[data-id="'+CSS.escape(id)+'"]');if(!el)return;
+  if(S.group||el.classList.contains('lead')){const y=$('#feed').scrollTop;feed();$('#feed').scrollTop=y;return}
+  const g=el.parentElement;if(!nw)g.appendChild(el);else{const f=[...g.querySelectorAll('.card:not(.unseen)')].find(c=>c!==el);if(f)g.insertBefore(el,f)}};
  $('#tm').onclick=()=>{D.items.forEach(i=>{if(isNew(i))U.seen[i.id]=1});saveU();feed();pills();badges()};
  const s=D.signals,dd=s.by_day.slice(-14),mx=Math.max(...dd.map(d=>d[1]),1);
  const gi=items.filter(i=>i.groups.length&&i.source_type!=='github').sort((a,b)=>(isMine(b)-isMine(a))||b.date.localeCompare(a.date)).slice(0,5);
@@ -273,7 +276,7 @@ function dataset(){const rows=D.items;const c=k=>Object.entries(rows.reduce((a,i
  stackbars($('#tl'),ds.map(d=>({label:d,parts:secs.map(k=>[by[d][k]||0,`var(--s-${k})`,SEC[k]])})),{h:150})}
 
 /* ---------- boot ---------- */
-function route(){REDRAW=null;const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v,ic])=>`<a href="#${k}" class="${k===h?'on':''}"><span class="ic">${ic}</span><span class="tx">${v}</span>${k==='today'||k==='saved'?`<span class="bd" data-b="${k}"></span>`:''}</a>`).join('');badges();({today,groups,funding,brainstorm,saved,background,dataset}[h]||today)()}
+function route(){REDRAW=null;RESORT=null;const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v,ic])=>`<a href="#${k}" class="${k===h?'on':''}"><span class="ic">${ic}</span><span class="tx">${v}</span>${k==='today'||k==='saved'?`<span class="bd" data-b="${k}"></span>`:''}</a>`).join('');badges();({today,groups,funding,brainstorm,saved,background,dataset}[h]||today)()}
 $('#theme').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;const n=dark?'light':'dark';r.dataset.theme=n;store.set('theme',n)};
 /* ---------- password gate (data is AES-256-GCM encrypted; decrypted in this browser only) ---------- */
 const b64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
