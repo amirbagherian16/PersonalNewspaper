@@ -159,6 +159,8 @@ def gnews(query, section, source_type="news", groups=None, days=LOOKBACK, keep=N
         blob = title + " " + clean(it.findtext("description"))
         if keep and not keep.search(blob):
             continue
+        if source_type == "linkedin" and LI_JUNK.search(title):
+            continue
         if source_type == "linkedin" and "linkedin" not in (outlet + it.findtext("link", "")).lower():
             continue
         add(id="news:" + mk_id(norm_title(title)), source_type=source_type, section=section, date=iso(d), title=title,
@@ -168,9 +170,44 @@ def gnews(query, section, source_type="news", groups=None, days=LOOKBACK, keep=N
             break
 
 
+
+def bing_news(query, section, days=LOOKBACK, keep=None, limit=20):
+    """Bing News RSS: a second news index with real publisher URLs (extra recall)."""
+    raw = get("https://www.bing.com/news/search?format=rss&q=" + urllib.parse.quote_plus(query))
+    time.sleep(0.5)
+    if not raw:
+        return
+    txt = raw.decode("utf-8", "ignore")
+    n = 0
+    for it in re.findall(r"<item>(.*?)</item>", txt, re.S):
+        g = lambda tag: html.unescape((re.search(rf"<{tag}>(.*?)</{tag}>", it, re.S) or [None, ""])[1]).strip()  # noqa
+        title, link, desc = clean(g("title")), g("link"), clean(g("description"))
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(link).query).get("url")
+        url = q[0] if q else link
+        try:
+            d = parsedate_to_datetime(g("pubDate")).astimezone(timezone.utc)
+        except Exception:
+            continue
+        if (NOW - d).days > days + 1 or not title:
+            continue
+        if keep and not keep.search(title + " " + desc):
+            continue
+        outlet = clean(g("News:Source")) or urllib.parse.urlparse(url).netloc
+        add(id="news:" + mk_id(norm_title(title)), source_type="news", section=section, date=iso(d), title=title,
+            url=url, outlet=outlet, summary=desc)
+        n += 1
+        if n >= limit:
+            break
+
 # ---------------------------------------------------------------- Mastodon / HN
 REL = re.compile(r"concuss|\bTBI\b|brain injur|head (injur|impact|trauma)|\bCTE\b|encephalopath|mouthguard|neurotrauma|"
-                 r"blast|subconcuss|helmet|brain trauma", re.I)
+                 r"blast|subconcuss|helmet|brain trauma|neurotrauma", re.I)
+REL_LI = re.compile(REL.pattern + r"|\bbrain\b.{0,40}(injur|impact|trauma|biomech|model|simulat|strain|safe|protect)|"
+                    r"(injur|impact|trauma|biomech|simulat|strain).{0,40}\bbrain\b|finite element.{0,40}(brain|head)|hiper|brain-safe|"
+                    r"head (kinematic|model|protect)|sports? (injur|safety)|player safety|neurodegener", re.I)
+LI_JUNK = re.compile(r"hiring|we.re looking for|job opening|vacanc|recruit|business head|head of |market (growth|size|outlook|report|share)|"
+                     r"market.{0,30}(compan|leading|global|intelligence|outlook|manufactur|supplier)|manufacturers|suppliers|cagr|forecast 20\d\d|webinar series|click here to apply|apply now", re.I)
+REL_WIDE = re.compile(REL.pattern + r"|\bbrain\b|\bhead\b|neuro|biomechanic|hiper|mouth ?guard|finite element", re.I)
 
 
 def mastodon(tag):
@@ -404,7 +441,7 @@ def og_image(url):
     return img if img and img.startswith("http") else None
 
 
-def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=420):
+def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=int(os.environ.get("ENRICH_BUDGET", 420))):
     t0, done = time.time(), 0
     for it in history:  # history is sorted newest first
         if done >= cap or time.time() - t0 > budget_s:
@@ -423,7 +460,10 @@ def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=420):
                     continue
                 it["url"] = url = real
             it["enriched"] = True
-            it["img"] = og_image(url)
+            it["img"] = None if it["source_type"] == "linkedin" else og_image(url)  # LinkedIn's og:image is a generic logo
+            m = re.search(r"activity[-:](\d{16,})", url)
+            if m:  # LinkedIn activity ids embed a millisecond timestamp
+                it["date"] = iso(datetime.fromtimestamp((int(m.group(1)) >> 22) / 1000, timezone.utc))
         except Exception as e:  # noqa
             log(f"enrich fail: {e}")
         time.sleep(0.6)
@@ -482,6 +522,10 @@ def main():
         history[:] = [h for h in history if not h.get("_drop")]
         seen.clear()
         seen.update({h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history})
+    if os.environ.get("PURGE_LINKEDIN"):
+        history[:] = [h for h in history if h["source_type"] != "linkedin"]
+        seen.clear()
+        seen.update({h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history})
     gdays = 365 if backfill else max(LOOKBACK, 14)
     ndays = 30 if backfill else max(LOOKBACK, 7)
     # 1. topics
@@ -491,7 +535,8 @@ def main():
         for q in cfg.get("preprint", []):
             preprints(q, section)
         for q in cfg.get("news", []):
-            gnews(q, section, keep=REL)
+            gnews(q, section, keep=REL_WIDE)
+            bing_news(q, section, keep=REL_WIDE)
     # 2. groups
     github_repos = {}
     for g in CFG["groups"]:
@@ -502,6 +547,10 @@ def main():
                  "traumatic", "research", "stanford", "penn", "state", "college", "imperial", "testing", "laboratory",
                  "player", "health", "web", "services", "digital", "amazon", "committee", "spine", "neck"}]
         keep = re.compile("|".join(sorted(set(toks))) if toks else ".", re.I)
+        for q in g.get("linkedin", []):  # people / org targeted LinkedIn searches: no topic filter
+            named = q.startswith('"') and q.endswith('"')  # exact person/org name: no topical filter needed
+            gnews(f"site:linkedin.com {q}", "group_update", source_type="linkedin", groups=[g["id"]], keep=None if named else REL_LI,
+                  days=60 if (backfill or g["id"] in bf_groups or os.environ.get("BACKFILL_LINKEDIN")) else 14, limit=40)
         for q in g["news"]:
             gnews(q, "group_update", groups=[g["id"]], days=ndays, keep=keep, limit=15)
         for pi in g.get("nih_pi", []):
@@ -522,8 +571,9 @@ def main():
               keep=re.compile(REL.pattern + "|brain|head injur", re.I), limit=12)
     items[:] = [i for i in items if i["source_type"] != "funding_news" or FUND_RE.search(i["title"])]
     # 3. social
+    li_days = 45 if (backfill or os.environ.get("BACKFILL_LINKEDIN")) else 14
     for q in CFG["social"]["linkedin_queries"]:
-        gnews(f"site:linkedin.com {q}", "general_tbi", source_type="linkedin", days=7, keep=REL, limit=12)
+        gnews(f"site:linkedin.com {q}", "general_tbi", source_type="linkedin", days=li_days, keep=REL_LI, limit=40)
     for t in CFG["social"]["mastodon_tags"]:
         mastodon(t)
     for q in CFG["social"]["hackernews_queries"]:
@@ -553,6 +603,10 @@ def main():
     log(f"candidates={len(items)} new={len(new)} history_before={len(history)}")
     history.extend(new)
     history.sort(key=lambda x: (x["first_seen"], x["date"]), reverse=True)
+    history[:] = [h for h in history if not (h["source_type"] == "linkedin" and LI_JUNK.search(h["title"]))]
+    for h in history:
+        if h["source_type"] == "linkedin":
+            h["img"] = None
     enrich(history)
     (ROOT / "data").mkdir(exist_ok=True)
     hist_path.write_text(encrypt_blob(json.dumps(history, ensure_ascii=False).encode("utf-8"), PW), encoding="utf-8")

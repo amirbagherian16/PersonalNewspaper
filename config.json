@@ -5,7 +5,8 @@
   "contact_sport": {
    "pubmed": [
     "(concussion OR \"head impact\" OR \"repetitive head impact\" OR subconcussive) AND (football OR soccer OR rugby OR hockey OR boxing OR athlete* OR sport*)",
-    "instrumented mouthguard OR \"helmet sensor\" OR \"head impact telemetry\""
+    "instrumented mouthguard OR \"helmet sensor\" OR \"head impact telemetry\"",
+    "(\"head kinematics\" OR \"helmet\" OR \"mouthguard\") AND (impact OR concussion)"
    ],
    "news": [
     "concussion football",
@@ -15,7 +16,22 @@
     "NFL concussion helmet",
     "youth sports concussion",
     "instrumented mouthguard",
-    "head impact sensor"
+    "head impact sensor",
+    "head injury rugby",
+    "NHL concussion",
+    "NCAA concussion",
+    "FIFA concussion protocol",
+    "World Rugby head injury",
+    "Concussion Legacy Foundation",
+    "Boston University CTE study",
+    "helmet testing Virginia Tech",
+    "Guardian Cap helmet",
+    "smart mouthguard",
+    "concussion lawsuit",
+    "high school football head injuries",
+    "women's soccer concussion",
+    "boxing brain injury",
+    "MMA brain injury"
    ],
    "preprint": [
     "concussion OR \"head impact\" OR subconcussive"
@@ -24,12 +40,17 @@
   "biomechanics_modeling": {
    "pubmed": [
     "(\"finite element\" OR \"computational model\" OR biomechanics) AND (brain OR head) AND (injury OR impact)",
-    "(\"machine learning\" OR \"deep learning\" OR surrogate) AND (\"brain injury\" OR concussion) AND (strain OR kinematics OR biomechanic*)"
+    "(\"machine learning\" OR \"deep learning\" OR surrogate) AND (\"brain injury\" OR concussion) AND (strain OR kinematics OR biomechanic*)",
+    "(\"brain strain\" OR \"tissue strain\" OR \"head model\") AND (impact OR injury)"
    ],
    "news": [
     "brain injury computer model",
     "head injury biomechanics",
-    "AI traumatic brain injury prediction"
+    "AI traumatic brain injury prediction",
+    "brain injury finite element",
+    "head model strain brain",
+    "digital twin brain injury",
+    "machine learning concussion detection"
    ],
    "preprint": [
     "\"finite element\" AND (brain OR head) AND (impact OR injury)",
@@ -44,7 +65,10 @@
    "news": [
     "blast traumatic brain injury",
     "veterans brain injury blast overpressure",
-    "military TBI research"
+    "military TBI research",
+    "blast overpressure brain",
+    "military brain health",
+    "veterans traumatic brain injury"
    ],
    "preprint": [
     "blast AND (\"brain injury\" OR neurotrauma)"
@@ -61,7 +85,12 @@
     "TBI blood test",
     "traumatic brain injury study",
     "brain injury FDA",
-    "concussion recovery study"
+    "concussion recovery study",
+    "GFAP blood test brain injury",
+    "concussion treatment trial",
+    "pediatric concussion study",
+    "neurocritical care brain injury",
+    "brain injury rehabilitation study"
    ],
    "preprint": [
     "\"traumatic brain injury\" AND (biomarker OR clinical OR outcome)"
@@ -73,7 +102,10 @@
    ],
    "news": [
     "traumatic brain injury",
-    "TBI research breakthrough"
+    "TBI research breakthrough",
+    "brain injury research",
+    "concussion research news",
+    "neurotrauma"
    ],
    "preprint": [
     "\"traumatic brain injury\""
@@ -91,9 +123,40 @@
   "linkedin_queries": [
    "concussion",
    "traumatic brain injury",
-   "head impact biomechanics",
+   "TBI",
+   "head impact",
+   "head injury",
+   "repetitive head impacts",
+   "subconcussive",
    "instrumented mouthguard",
-   "brain injury research"
+   "smart mouthguard",
+   "helmet testing",
+   "helmet rating",
+   "Hiper helmet",
+   "football helmet safety",
+   "brain injury biomechanics",
+   "head injury biomechanics",
+   "finite element head model",
+   "brain injury simulation",
+   "brain injury machine learning",
+   "concussion research",
+   "neurotrauma",
+   "blast brain injury",
+   "CTE chronic traumatic encephalopathy",
+   "TBI biomarker",
+   "GFAP UCH-L1",
+   "concussion biomarker",
+   "concussion sport",
+   "youth football concussion",
+   "rugby head injury",
+   "soccer heading brain",
+   "NFL concussion",
+   "brain injury grant funded",
+   "brain injury hub",
+   "new paper brain injury",
+   "new paper concussion",
+   "head impact sensor",
+   "digital twin brain injury"
   ],
   "hackernews_queries": [
    "concussion",
@@ -134,6 +197,12 @@
     {
      "last_name": "Hajiaghamemar"
     }
+   ],
+   "linkedin": [
+    "\"Marzieh Memar\"",
+    "\"Memar Lab\"",
+    "\"Amirhossein Bagherian\"",
+    "UTSA \"brain injury\" biomechanics"
    ]
   },
   {
@@ -149,6 +218,12 @@
    ],
    "aliases": [
     "ghajari"
+   ],
+   "linkedin": [
+    "\"Mazdak Ghajari\"",
+    "\"HEAD Lab\" Imperial",
+    "Imperial \"Hiper\" helmet",
+    "Imperial College brain injury"
    ]
   },
   {
@@ -171,6 +246,11 @@
      "first_name": "Reuben",
      "last_name": "Kraft"
     }
+   ],
+   "linkedin": [
+    "\"Reuben Kraft\"",
+    "\"Kraft Lab\" Penn State",
+    "Penn State brain injury simulation"
    ]
   },
   {
@@ -192,6 +272,11 @@
      "first_name": "Songbai",
      "last_name": "Ji"
     }
+   ],
+   "linkedin": [
+    "\"Songbai Ji\"",
+    "WPI \"Ji Lab\"",
+    "WPI head impact biomechanics"
    ]
   },
   {
@@ -213,6 +298,11 @@
      "first_name": "David",
      "last_name": "Camarillo"
     }
+   ],
+   "linkedin": [
+    "\"David Camarillo\"",
+    "Stanford mouthguard concussion",
+    "Stanford \"Camarillo Lab\""
    ]
   },
   {
@@ -227,6 +317,11 @@
    ],
    "aliases": [
     "digital athlete"
+   ],
+   "linkedin": [
+    "AWS NFL \"Digital Athlete\"",
+    "NFL \"Head, Neck and Spine\"",
+    "NFL player health safety injury"
    ]
   },
   {
@@ -240,6 +335,9 @@
    ],
    "aliases": [
     "prevent biometrics"
+   ],
+   "linkedin": [
+    "\"Prevent Biometrics\""
    ]
   },
   {
@@ -253,6 +351,10 @@
    ],
    "aliases": [
     "biocore"
+   ],
+   "linkedin": [
+    "\"Biocore\" helmet",
+    "\"Biocore\" biomechanics"
    ]
   }
  ],
