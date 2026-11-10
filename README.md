@@ -12,16 +12,22 @@ A personal, automatically updated newspaper on traumatic brain injury (TBI), foc
 - **Background**: primer on mechanisms, metrics, methods, clinical landscape and venues.
 - **Dataset**: categorized dataset (`docs/data/dataset.csv` and `.jsonl`), grown daily and de-duplicated.
 
+## Privacy (password protected)
+GitHub Pages cannot do real logins, so all site data (`docs/data/bundle.enc`) and the stored history (`data/items.enc`) are AES-256-GCM encrypted with a key derived from your password (PBKDF2, 600k rounds). The page asks for the password and decrypts in your browser. Without it, the public repo only shows ciphertext.
+- Set the password as a repository secret named `SITE_PASSWORD` (8+ characters, longer is better). Changing it re-encrypts everything on the next run.
+- Locally: `SITE_PASSWORD=... python scripts/fetch.py`. Needs `pip install cryptography`.
+- The code, `config.json` and `content/` are still public. Git history from before encryption still contains old plaintext news data.
+
 ## Sources and limits
 PubMed, Europe PMC (preprints), Google News RSS (news; LinkedIn posts through `site:linkedin.com`), Mastodon hashtags, Hacker News, GitHub API.
 Google Scholar, X/Twitter, Reddit, Bluesky and LinkedIn do not allow free anonymous access, so they are not scraped. LinkedIn coverage is only what Google News indexes. Classification is keyword-rule based, so expect some mislabels.
 
 ## Customize
-Edit `config.json` (queries, groups, author searches, lookback window). Add `ideas.json` and `background.json` entries in `docs/`.
+Edit `config.json` (queries, groups, author searches, lookback window). Edit the ideas and background text in `content/`.
 
 ## Run locally
 ```bash
-python scripts/fetch.py
+SITE_PASSWORD=yourpassword python scripts/fetch.py
 python -m http.server -d docs 8000   # open http://localhost:8000
 ```
 

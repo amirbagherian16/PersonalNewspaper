@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/daily.yml"]
+    paths: ["docs/**", "scripts/**", "content/**", "config.json", ".github/workflows/daily.yml"]
 
 permissions:
   contents: write
@@ -21,16 +21,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Skip the data refresh on push events; only redeploy then.
-    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch, classify, export
+      - run: pip install cryptography
+      - name: Require site password
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: |
+          if [ -z "$SITE_PASSWORD" ]; then echo "::error::Add the repository secret SITE_PASSWORD (Settings > Secrets and variables > Actions)."; exit 1; fi
+      - name: Fetch, classify, encrypt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
           PYTHONIOENCODING: utf-8
         run: python scripts/fetch.py
       - name: Commit changes
@@ -44,8 +49,7 @@ jobs:
 
   deploy:
     needs: [build]
-    # Run after build, or alone on push events (when build is skipped).
-    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

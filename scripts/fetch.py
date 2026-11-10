@@ -3,10 +3,11 @@
 
 Sources: PubMed (E-utilities), Europe PMC (preprints), Google News RSS (news + LinkedIn
 posts via site: search), Mastodon hashtag RSS, Hacker News, GitHub API (your lab repos).
-Outputs: data/items.json (full history), docs/data/latest.json (site feed),
-docs/data/dataset.csv + dataset.jsonl (categorized dataset).
+Everything the site shows is AES-256-GCM encrypted (key from PBKDF2 of SITE_PASSWORD), so the public
+repo and GitHub Pages only ever contain ciphertext.
+Outputs: data/items.enc (encrypted history), docs/data/bundle.enc (encrypted site payload).
 """
-import csv, hashlib, html, json, os, re, sys, time
+import base64, csv, hashlib, html, io, json, os, re, sys, time
 import urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
@@ -428,10 +429,45 @@ def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=420):
         time.sleep(0.6)
     log(f"enriched {done} items in {time.time() - t0:.0f}s")
 
+
+# ---------------------------------------------------------------- Encryption (WebCrypto compatible)
+ITER = 600_000
+
+
+def _key(pw, salt, iters):
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    return PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=iters).derive(pw.encode("utf-8"))
+
+
+def encrypt_blob(data, pw):
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    salt, iv = os.urandom(16), os.urandom(12)
+    ct = AESGCM(_key(pw, salt, ITER)).encrypt(iv, data, None)
+    b = lambda x: base64.b64encode(x).decode()  # noqa
+    return json.dumps({"v": 1, "iter": ITER, "salt": b(salt), "iv": b(iv), "ct": b(ct)})
+
+
+def decrypt_blob(text, pw):
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    o = json.loads(text)
+    d = lambda k: base64.b64decode(o[k])  # noqa
+    return AESGCM(_key(pw, d("salt"), o["iter"])).decrypt(d("iv"), d("ct"), None)
+
+
 # ---------------------------------------------------------------- main
 def main():
-    hist_path = ROOT / "data" / "items.json"
-    history = json.loads(hist_path.read_text(encoding="utf-8")) if hist_path.exists() else []
+    PW = os.environ.get("SITE_PASSWORD")
+    if not PW or len(PW) < 8:
+        sys.exit("Set SITE_PASSWORD (8+ chars). It encrypts all site data; nothing is written in plaintext.")
+    hist_path = ROOT / "data" / "items.enc"
+    legacy = ROOT / "data" / "items.json"  # one-time migration from the old plaintext history
+    if hist_path.exists():
+        history = json.loads(decrypt_blob(hist_path.read_text(encoding="utf-8"), PW).decode("utf-8"))
+    elif legacy.exists():
+        history = json.loads(legacy.read_text(encoding="utf-8"))
+    else:
+        history = []
     seen = {h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history}
 
     backfill = not history  # first run: seed group tabs with a longer window
@@ -519,20 +555,21 @@ def main():
     history.sort(key=lambda x: (x["first_seen"], x["date"]), reverse=True)
     enrich(history)
     (ROOT / "data").mkdir(exist_ok=True)
-    hist_path.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
+    hist_path.write_text(encrypt_blob(json.dumps(history, ensure_ascii=False).encode("utf-8"), PW), encoding="utf-8")
+    if legacy.exists():
+        legacy.unlink()
 
     # ------------------------------------------------ outputs
     out = ROOT / "docs" / "data"
     out.mkdir(parents=True, exist_ok=True)
     fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "img", "deadline", "summary"]
-    with open(out / "dataset.csv", "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.writer(f)
-        w.writerow(fields)
-        for h in history:
-            w.writerow([";".join(h[k]) if isinstance(h.get(k), list) else h.get(k, "") for k in fields])
-    with open(out / "dataset.jsonl", "w", encoding="utf-8") as f:
-        for h in history:
-            f.write(json.dumps({k: h.get(k) for k in fields}, ensure_ascii=False) + "\n")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(fields)
+    for h in history:
+        w.writerow([";".join(h[k]) if isinstance(h.get(k), list) else h.get(k, "") for k in fields])
+    csv_text = buf.getvalue()
+    jsonl_text = "".join(json.dumps({k: h.get(k) for k in fields}, ensure_ascii=False) + "\n" for h in history)
 
     cutoff = iso(TODAY - timedelta(days=CFG["history_days_on_site"]))
     recent = [h for h in history if h["first_seen"] >= cutoff or h.get("groups") or h["source_type"] == "opportunity"]
@@ -582,8 +619,14 @@ def main():
         },
         "fetch_log": [m for m in LOG if m.startswith("FAIL")][:20],
     }
-    (out / "latest.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    log(f"wrote {len(recent)} items to latest.json; total {len(history)}")
+    content = ROOT / "content"
+    bundle = {"latest": payload, "ideas": json.loads((content / "ideas.json").read_text(encoding="utf-8")),
+              "background": json.loads((content / "background.json").read_text(encoding="utf-8")),
+              "csv": csv_text, "jsonl": jsonl_text}
+    (out / "bundle.enc").write_text(encrypt_blob(json.dumps(bundle, ensure_ascii=False).encode("utf-8"), PW), encoding="utf-8")
+    for old in ("latest.json", "dataset.csv", "dataset.jsonl"):  # never leave plaintext behind
+        (out / old).unlink(missing_ok=True)
+    log(f"wrote encrypted bundle: {len(recent)} items on site; total {len(history)}")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ const TYPE={paper:'Paper',preprint:'Preprint',news:'News',linkedin:'LinkedIn',so
 const FEED_TYPES=['paper','preprint','news','funding_news','linkedin','social','github'];
 const NOFEED=['grant','opportunity'];
 const COL={contact_sport:['#f08c3a','#8a2d12'],biomechanics_modeling:['#4aa3d8','#14375e'],blast_military:['#b56ab0','#3d1840'],medical_clinical:['#3bbd8e','#0d4a3a'],general_tbi:['#8f95e8','#2a2c66']};
-const $=s=>document.querySelector(s);let D=null,IDEAS=null,BG=null;
+const $=s=>document.querySelector(s);let D=null,IDEAS=null,BG=null,DL={csv:'',jsonl:''};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safe=u=>/^https?:\/\//i.test(u||'')?u:'#';
 const gname=id=>(D.groups.find(g=>g.id===id)||{}).name||id;
@@ -120,13 +120,32 @@ function background(){$('#main').innerHTML=`<div class="cols two"><section class
 
 /* ---------- DATASET ---------- */
 function dataset(){const rows=D.items;const c=k=>Object.entries(rows.reduce((a,i)=>(a[i[k]]=(a[i[k]]||0)+1,a),{})).sort((a,b)=>b[1]-a[1]);
- $('#main').innerHTML=`<div class="cols two"><section class="panel filters"><h3>Dataset</h3><div class="scroll"><p class="meta">Every item is auto-categorized (section, tags, sports, groups). Full history, de-duplicated:</p><a class="btn" href="data/dataset.csv">dataset.csv</a><a class="btn" href="data/dataset.jsonl">dataset.jsonl</a>
+ $('#main').innerHTML=`<div class="cols two"><section class="panel filters"><h3>Dataset</h3><div class="scroll"><p class="meta">Every item is auto-categorized (section, tags, sports, groups). Full history, de-duplicated:</p><a class="btn" href="${URL.createObjectURL(new Blob(['\ufeff'+DL.csv],{type:'text/csv'}))}" download="tbi_dataset.csv">dataset.csv</a><a class="btn" href="${URL.createObjectURL(new Blob([DL.jsonl],{type:'application/x-ndjson'}))}" download="tbi_dataset.jsonl">dataset.jsonl</a>
  <div class="sec"><h4>By section</h4>${c('section').map(([k,v])=>`<div class="meta"><i class="dot" style="background:var(--s-${k})"></i>${esc(SEC[k]||k)}: <b>${v}</b></div>`).join('')}</div><div class="sec"><h4>By source</h4>${c('source_type').map(([k,v])=>`<div class="meta">${esc(TYPE[k]||k)}: <b>${v}</b></div>`).join('')}</div></div></section>
  <section class="panel scrollpanel"><h3>Latest items<span class="meta">${D.total_items} total</span></h3><div class="scroll" style="padding:0"><table class="tbl"><tr><th>Date</th><th>Section</th><th>Type</th><th>Title</th><th>Tags</th></tr>${rows.slice(0,400).map(i=>`<tr><td>${esc(i.date)}</td><td>${esc(SEC[i.section]||i.section)}</td><td>${esc(i.source_type)}</td><td><a href="${esc(safe(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.tags.join(', '))}</td></tr>`).join('')}</table></div></section></div>`}
 
 /* ---------- boot ---------- */
 function route(){const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v])=>`<a href="#${k}" class="${k===h?'on':''}">${v}</a>`).join('');({today,groups,funding,brainstorm,background,dataset}[h]||today)()}
 $('#theme').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;const n=dark?'light':'dark';r.dataset.theme=n;store.set('theme',n)};
-Promise.all(['data/latest.json','ideas.json','background.json'].map(u=>fetch(u,{cache:'no-cache'}).then(r=>r.json()))).then(([d,i,b])=>{D=d;IDEAS=i;BG=b;
- $('#sub').textContent=`Updated ${D.generated} · ${D.new_today} new today`;route();addEventListener('hashchange',route)})
- .catch(e=>{$('#main').innerHTML='<p class="empty">Could not load data: '+esc(e.message)+'. Locally, serve with: python -m http.server -d docs</p>'});
+/* ---------- password gate (data is AES-256-GCM encrypted; decrypted in this browser only) ---------- */
+const b64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function decryptBundle(text,pw){const o=JSON.parse(text);
+ const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+ const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(o.salt),iterations:o.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+ const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(o.iv)},key,b64(o.ct));
+ return JSON.parse(new TextDecoder().decode(pt))}
+function start(b){D=b.latest;IDEAS=b.ideas;BG=b.background;DL={csv:b.csv,jsonl:b.jsonl};
+ $('#sub').textContent=`Updated ${D.generated} · ${D.new_today} new today`;$('#nav').style.visibility='visible';$('#lock').hidden=false;route();addEventListener('hashchange',route)}
+function gate(text){
+ const saved=store.get('pw')||(()=>{try{return sessionStorage.getItem('pw')}catch(e){return null}})();
+ const form=(msg)=>{$('#nav').style.visibility='hidden';$('#lock').hidden=true;
+  $('#main').innerHTML=`<div style="margin:auto;max-width:340px;width:100%"><form class="panel" id="lf" style="padding:22px;gap:12px"><div style="font:700 22px Georgia,serif">Private newspaper</div><div class="meta">Enter the password to unlock.</div>
+  <input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus style="margin:0"><label class="meta"><input type="checkbox" id="rm"> Remember on this device</label>
+  <button class="btn" style="border:0;cursor:pointer;margin:0" type="submit">Unlock</button><div id="err" class="meta" style="color:var(--acc)">${esc(msg||'')}</div></form></div>`;
+  $('#main').style.display='flex';$('#lf').onsubmit=async e=>{e.preventDefault();const pw=$('#pw').value;$('#err').textContent='Decrypting…';
+   try{const b=await decryptBundle(text,pw);if($('#rm').checked)store.set('pw',pw);else try{sessionStorage.setItem('pw',pw)}catch(x){}
+    $('#main').style.display='';start(b)}catch(x){$('#err').textContent='Wrong password.'}}};
+ if(saved)decryptBundle(text,saved).then(start).catch(()=>{store.set('pw','');form('Saved password no longer works.')});else form()}
+$('#lock').onclick=()=>{store.set('pw','');try{sessionStorage.removeItem('pw')}catch(e){}location.reload()};
+fetch('data/bundle.enc',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('data not published yet');return r.text()}).then(gate)
+ .catch(e=>{$('#main').innerHTML='<p class="empty">Could not load data: '+esc(e.message)+'.</p>'});
