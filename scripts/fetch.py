@@ -1,0 +1,427 @@
+#!/usr/bin/env python3
+"""Daily TBI newspaper builder. Standard library only, no paid APIs, no LLM calls.
+
+Sources: PubMed (E-utilities), Europe PMC (preprints), Google News RSS (news + LinkedIn
+posts via site: search), Mastodon hashtag RSS, Hacker News, GitHub API (your lab repos).
+Outputs: data/items.json (full history), docs/data/latest.json (site feed),
+docs/data/dataset.csv + dataset.jsonl (categorized dataset).
+"""
+import csv, hashlib, html, json, os, re, sys, time
+import urllib.parse, urllib.request
+import xml.etree.ElementTree as ET
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CFG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+NOW = datetime.now(timezone.utc)
+TODAY = NOW.date()
+LOOKBACK = int(os.environ.get("LOOKBACK_DAYS", CFG["lookback_days"]))
+UA = "Mozilla/5.0 (PersonalNewspaper TBI digest; +https://github.com/amirbagherian16/PersonalNewspaper)"
+LOG = []
+
+
+def log(msg):
+    print(msg, file=sys.stderr)
+    LOG.append(msg)
+
+
+def get(url, retries=2, timeout=30, headers=None):
+    h = {"User-Agent": UA}
+    h.update(headers or {})
+    for i in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=h)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except Exception as e:  # noqa
+            if i == retries:
+                log(f"FAIL {url[:110]} -> {e}")
+                return None
+            time.sleep(1.5 * (i + 1))
+
+
+def clean(s):
+    s = html.unescape(re.sub(r"<[^>]+>", " ", s or ""))
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def iso(d):
+    return d.strftime("%Y-%m-%d")
+
+
+def mk_id(*parts):
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def norm_title(t):
+    return re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()[:90]
+
+
+items = []  # new candidate items
+
+
+def add(**kw):
+    kw.setdefault("groups", [])
+    kw.setdefault("summary", "")
+    kw["summary"] = kw["summary"][:600]
+    kw["title"] = clean(kw["title"])
+    items.append(kw)
+
+
+# ---------------------------------------------------------------- PubMed
+def pubmed(query, section, groups=None, days=LOOKBACK):
+    q = urllib.parse.urlencode({"db": "pubmed", "term": query, "reldate": days, "datetype": "edat",
+                                "retmax": 60, "retmode": "json", "sort": "date"})
+    raw = get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?" + q)
+    time.sleep(0.4)
+    if not raw:
+        return
+    ids = json.loads(raw)["esearchresult"].get("idlist", [])
+    if not ids:
+        return
+    raw = get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&id=" + ",".join(ids))
+    time.sleep(0.4)
+    if not raw:
+        return
+    root = ET.fromstring(raw)
+    for art in root.iter("PubmedArticle"):
+        pmid = art.findtext(".//PMID")
+        title = "".join(art.find(".//ArticleTitle").itertext()) if art.find(".//ArticleTitle") is not None else ""
+        abst = " ".join("".join(a.itertext()) for a in art.findall(".//AbstractText"))
+        journal = art.findtext(".//Journal/Title") or "PubMed"
+        auths = []
+        for a in art.findall(".//Author")[:6]:
+            ln, ini = a.findtext("LastName"), a.findtext("Initials")
+            if ln:
+                auths.append(f"{ln} {ini or ''}".strip())
+        n_auth = len(art.findall(".//Author"))
+        y = art.findtext(".//ArticleDate/Year") or art.findtext(".//PubDate/Year") or str(TODAY.year)
+        m = art.findtext(".//ArticleDate/Month") or "1"
+        d = art.findtext(".//ArticleDate/Day") or "1"
+        mm = m if m.isdigit() else {"Jan": "1", "Feb": "2", "Mar": "3", "Apr": "4", "May": "5", "Jun": "6", "Jul": "7",
+                                      "Aug": "8", "Sep": "9", "Oct": "10", "Nov": "11", "Dec": "12"}.get(m[:3], "1")
+        try:
+            pub = f"{int(y):04d}-{int(mm):02d}-{int(d):02d}"
+        except ValueError:
+            pub = iso(TODAY)
+        author_str = ", ".join(auths) + (" et al." if n_auth > 6 else "")
+        add(id="pmid:" + pmid, source_type="paper", section=section, date=pub, title=title,
+            url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", outlet=journal,
+            summary=(author_str + " | " if author_str else "") + abst, groups=list(groups or []))
+
+
+# ---------------------------------------------------------------- Europe PMC preprints
+def preprints(query, section, days=max(LOOKBACK, 14)):
+    frm = iso(TODAY - timedelta(days=days))
+    q = f"({query}) AND SRC:PPR AND FIRST_PDATE:[{frm} TO {iso(TODAY)}]"
+    url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search?" + urllib.parse.urlencode(
+        {"query": q, "format": "json", "resultType": "core", "pageSize": 50})
+    raw = get(url)
+    time.sleep(0.3)
+    if not raw:
+        return
+    for r in json.loads(raw).get("resultList", {}).get("result", []):
+        doi = r.get("doi")
+        link = f"https://doi.org/{doi}" if doi else f"https://europepmc.org/article/PPR/{r.get('id')}"
+        add(id="doi:" + (doi or r.get("id", "")), source_type="preprint", section=section,
+            date=r.get("firstPublicationDate", iso(TODAY)), title=r.get("title", ""), url=link,
+            outlet=(r.get("bookOrReportDetails") or {}).get("publisher") or "Preprint",
+            summary=(r.get("authorString", "") + " | " if r.get("authorString") else "") + clean(r.get("abstractText", "")))
+
+
+# ---------------------------------------------------------------- Google News
+def gnews(query, section, source_type="news", groups=None, days=LOOKBACK, keep=None, limit=25):
+    q = urllib.parse.quote_plus(f"{query} when:{max(days, 1)}d")
+    raw = get(f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en")
+    time.sleep(0.5)
+    if not raw:
+        return
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return
+    n = 0
+    for it in root.iter("item"):
+        title = clean(it.findtext("title"))
+        outlet = clean(it.findtext("source")) or ""
+        if outlet and title.endswith(" - " + outlet):
+            title = title[: -len(outlet) - 3]
+        try:
+            d = parsedate_to_datetime(it.findtext("pubDate")).astimezone(timezone.utc)
+        except Exception:
+            d = NOW
+        if (NOW - d).days > days + 1:
+            continue
+        blob = title + " " + clean(it.findtext("description"))
+        if keep and not keep.search(blob):
+            continue
+        if source_type == "linkedin" and "linkedin" not in (outlet + it.findtext("link", "")).lower():
+            continue
+        add(id="news:" + mk_id(norm_title(title)), source_type=source_type, section=section, date=iso(d), title=title,
+            url=it.findtext("link"), outlet=outlet or "Google News", summary="", groups=list(groups or []))
+        n += 1
+        if n >= limit:
+            break
+
+
+# ---------------------------------------------------------------- Mastodon / HN
+REL = re.compile(r"concuss|\bTBI\b|brain injur|head (injur|impact|trauma)|\bCTE\b|encephalopath|mouthguard|neurotrauma|"
+                 r"blast|subconcuss|helmet|brain trauma", re.I)
+
+
+def mastodon(tag):
+    raw = get(f"https://mastodon.social/tags/{tag}.rss")
+    time.sleep(0.4)
+    if not raw:
+        return
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return
+    for it in root.iter("item"):
+        text = clean(it.findtext("description"))
+        if not REL.search(text):
+            continue
+        try:
+            d = parsedate_to_datetime(it.findtext("pubDate")).astimezone(timezone.utc)
+        except Exception:
+            continue
+        if (NOW - d).days > LOOKBACK:
+            continue
+        add(id="masto:" + it.findtext("link"), source_type="social", section="general_tbi", date=iso(d),
+            title=text[:140] + ("..." if len(text) > 140 else ""), url=it.findtext("link"), outlet="Mastodon",
+            summary=text)
+
+
+def hn(query):
+    since = int((NOW - timedelta(days=LOOKBACK)).timestamp())
+    raw = get("https://hn.algolia.com/api/v1/search_by_date?" + urllib.parse.urlencode(
+        {"query": query, "tags": "story", "numericFilters": f"created_at_i>{since}"}))
+    if not raw:
+        return
+    for h in json.loads(raw).get("hits", []):
+        if not h.get("title") or not REL.search(h["title"]):
+            continue
+        add(id="hn:" + h["objectID"], source_type="social", section="general_tbi", date=h["created_at"][:10],
+            title=h["title"], url=h.get("url") or f"https://news.ycombinator.com/item?id={h['objectID']}",
+            outlet="Hacker News", summary=f"{h.get('points', 0)} points, {h.get('num_comments', 0)} comments")
+
+
+# ---------------------------------------------------------------- GitHub (your lab)
+def github_user(login, gid):
+    hdr = {"Accept": "application/vnd.github+json"}
+    if os.environ.get("GITHUB_TOKEN"):
+        hdr["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
+    raw = get(f"https://api.github.com/users/{login}/repos?per_page=100&sort=pushed", headers=hdr)
+    if not raw:
+        return []
+    out = []
+    for r in json.loads(raw):
+        pushed = datetime.fromisoformat(r["pushed_at"].replace("Z", "+00:00"))
+        out.append({"name": r["name"], "desc": r.get("description") or "", "url": r["html_url"],
+                    "stars": r["stargazers_count"], "pushed": iso(pushed), "lang": r.get("language")})
+        if (NOW - pushed).days <= max(LOOKBACK, 7):
+            c = get(f"https://api.github.com/repos/{login}/{r['name']}/commits?per_page=1", headers=hdr)
+            msg = ""
+            if c:
+                try:
+                    msg = json.loads(c)[0]["commit"]["message"].split("\n")[0]
+                except Exception:
+                    pass
+            add(id="gh:" + mk_id(r["name"], iso(pushed)), source_type="github", section="group_update",
+                date=iso(pushed), title=f"{r['name']} updated", url=r["html_url"], outlet="GitHub",
+                summary=f"{r.get('description') or ''} Latest commit: {msg}", groups=[gid])
+    return out
+
+
+# ---------------------------------------------------------------- Classification (rule based)
+SECTION_KW = {
+    "contact_sport": r"football|soccer|rugby|hockey|boxing|\bMMA\b|lacrosse|basketball|athlete|sport|NFL|NCAA|helmet|mouthguard|"
+                     r"concussion|subconcuss|head impact|\bCTE\b|heading|youth|player",
+    "biomechanics_modeling": r"finite element|\bFE\b|\bFEM\b|biomechanic|computational|simulation|surrogate|machine learning|deep learning|"
+                             r"neural network|strain|kinematic|digital twin|mesh|head model|in silico|\bAI\b",
+    "blast_military": r"blast|overpressure|military|veteran|combat|service member|warfighter|explosi|shock ?tube|defense",
+    "medical_clinical": r"clinical|patient|trial|biomarker|GFAP|UCH-L1|neurofilament|\btau\b|intracranial|ICU|surgery|craniectomy|"
+                        r"rehabilitation|pediatric|outcome|mortality|guideline|FDA|diagnos|treatment|therapy|imaging|MRI|CT scan|blood test",
+}
+SPORTS = ["football", "soccer", "rugby", "hockey", "boxing", "MMA", "lacrosse", "basketball", "baseball", "cycling", "skiing",
+          "wrestling", "cheer", "equestrian", "motorsport"]
+TAGS = {
+    "biomarkers": r"biomarker|GFAP|UCH-L1|neurofilament|blood test|\btau\b|S100B",
+    "imaging": r"\bMRI\b|\bfMRI\b|\bDTI\b|diffusion|\bPET\b|CT scan|imaging|tractograph",
+    "machine-learning": r"machine learning|deep learning|neural network|\bAI\b|artificial intelligence|surrogate|random forest|U-?Net",
+    "finite-element": r"finite element|\bFEM?\b|head model|brain model|mesh",
+    "wearables": r"mouthguard|sensor|wearable|accelerometer|instrumented|telemetry",
+    "helmets-protective": r"helmet|headgear|guardian cap|padding|protective equipment",
+    "CTE-neurodegeneration": r"\bCTE\b|encephalopathy|neurodegenerat|dementia|alzheimer|amyloid",
+    "policy-safety": r"rule|policy|protocol|regulation|ban|lawsuit|settlement|legislat|guideline|committee",
+    "youth-pediatric": r"youth|child|pediatric|adolescen|high school|kids",
+    "female-athletes": r"female|women|girls|sex difference|menstrual",
+    "rehabilitation": r"rehabilit|return to play|return-to-play|recovery|exercise|therapy",
+    "animal-model": r"\bpig\b|porcine|swine|rat |mouse|mice|rodent|primate|ovine|animal model|cross-species|translational",
+    "astrocyte-cellular": r"astrocyte|microglia|neuron|axon|diffuse axonal|\bDAI\b|glia|in vitro|cell culture",
+    "subconcussion-RHI": r"subconcuss|repetitive head impact|\bRHI\b|cumulative",
+    "blast": r"blast|overpressure|shock ?tube",
+    "mild-TBI": r"concussion|mild traumatic|\bmTBI\b",
+    "severe-TBI": r"severe|ICU|intracranial pressure|craniectomy|neurocritical|coma",
+}
+STOP = set("""the and for with that this from are was were has have had not but its their they them than then there which while into over under
+between about after before during using used use based study analysis effect effects among within without also more most such can may might one two
+three new its our results result methods conclusion conclusions background objective objectives patients patient brain injury injuries traumatic tbi
+head review model models data research https http www com news says said will year years first high low""".split())
+
+
+def classify(it):
+    blob = f"{it['title']} {it['summary']}"
+    scores = {s: len(re.findall(p, blob, re.I)) for s, p in SECTION_KW.items()}
+    hint = it.get("section")
+    if hint in scores:
+        scores[hint] += 2  # origin-query prior
+    best = max(scores, key=scores.get)
+    it["section"] = best if scores[best] > 0 else (hint if hint not in (None, "group_update") else "general_tbi")
+    it["tags"] = [t for t, p in TAGS.items() if re.search(p, blob, re.I)]
+    it["sports"] = [s for s in SPORTS if re.search(r"\b" + s + r"\b", blob, re.I)]
+    return it
+
+
+def keywords(text):
+    return [w for w in re.findall(r"[a-z][a-z\-]{3,}", text.lower()) if w not in STOP]
+
+
+# ---------------------------------------------------------------- main
+def main():
+    hist_path = ROOT / "data" / "items.json"
+    history = json.loads(hist_path.read_text(encoding="utf-8")) if hist_path.exists() else []
+    seen = {h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history}
+
+    backfill = not history  # first run: seed group tabs with a longer window
+    gdays = 365 if backfill else max(LOOKBACK, 14)
+    ndays = 30 if backfill else max(LOOKBACK, 7)
+    # 1. topics
+    for section, cfg in CFG["topics"].items():
+        for q in cfg.get("pubmed", []):
+            pubmed(q, section)
+        for q in cfg.get("preprint", []):
+            preprints(q, section)
+        for q in cfg.get("news", []):
+            gnews(q, section, keep=REL)
+    # 2. groups
+    github_repos = {}
+    for g in CFG["groups"]:
+        for q in g.get("pubmed_authors", []):
+            pubmed(q, "group_update", groups=[g["id"]], days=gdays)
+        toks = [t for t in re.findall(r"[A-Za-z]{4,}", " ".join(g["news"]).lower()) if t not in
+                {"brain", "injury", "head", "lab", "mouthguard", "concussion", "biomechanics", "helmet", "simulation",
+                 "traumatic", "research", "stanford", "penn", "state", "college", "imperial", "testing", "laboratory",
+                 "player", "health", "web", "services", "digital", "amazon", "committee", "spine", "neck"}]
+        keep = re.compile("|".join(sorted(set(toks))) if toks else ".", re.I)
+        for q in g["news"]:
+            gnews(q, "group_update", groups=[g["id"]], days=ndays, keep=keep, limit=15)
+        if g.get("github"):
+            github_repos[g["id"]] = github_user(g["github"], g["id"])
+    # 3. social
+    for q in CFG["social"]["linkedin_queries"]:
+        gnews(f"site:linkedin.com {q}", "general_tbi", source_type="linkedin", days=7, keep=REL, limit=12)
+    for t in CFG["social"]["mastodon_tags"]:
+        mastodon(t)
+    for q in CFG["social"]["hackernews_queries"]:
+        hn(q)
+
+    # dedupe + classify
+    new, local = [], set()
+    for it in items:
+        key_t = "t:" + norm_title(it["title"])
+        if not it["title"] or it["id"] in seen or key_t in seen or it["id"] in local or key_t in local:
+            # merge group membership for already-known items
+            for h in history:
+                if h["id"] == it["id"] and it["groups"]:
+                    h["groups"] = sorted(set(h.get("groups", [])) | set(it["groups"]))
+            continue
+        local.update([it["id"], key_t])
+        orig_section = it["section"]
+        classify(it)
+        it["origin"] = orig_section
+        it["first_seen"] = iso(TODAY)
+        # tag mentions of groups in titles/summaries
+        blob = f"{it['title']} {it['summary']}".lower()
+        for g in CFG["groups"]:
+            for q in g["news"] + g.get("pubmed_authors", []):
+                nm = re.sub(r"\[.*?\]|\(.*?\)|AND.*", "", q).strip().lower()
+                if len(nm) > 6 and nm in blob and g["id"] not in it["groups"]:
+                    it["groups"].append(g["id"])
+        new.append(it)
+    log(f"candidates={len(items)} new={len(new)} history_before={len(history)}")
+    history.extend(new)
+    history.sort(key=lambda x: (x["first_seen"], x["date"]), reverse=True)
+    (ROOT / "data").mkdir(exist_ok=True)
+    hist_path.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
+
+    # ------------------------------------------------ outputs
+    out = ROOT / "docs" / "data"
+    out.mkdir(parents=True, exist_ok=True)
+    fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "summary"]
+    with open(out / "dataset.csv", "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f)
+        w.writerow(fields)
+        for h in history:
+            w.writerow([";".join(h[k]) if isinstance(h.get(k), list) else h.get(k, "") for k in fields])
+    with open(out / "dataset.jsonl", "w", encoding="utf-8") as f:
+        for h in history:
+            f.write(json.dumps({k: h.get(k) for k in fields}, ensure_ascii=False) + "\n")
+
+    cutoff = iso(TODAY - timedelta(days=CFG["history_days_on_site"]))
+    recent = [h for h in history if h["first_seen"] >= cutoff or h.get("groups")]
+    last7 = iso(TODAY - timedelta(days=7))
+    # trend signals (rule-based, free)
+    week, prior = Counter(), Counter()
+    for h in history:
+        ws = set(keywords(h["title"] + " " + h["summary"][:300]))
+        (week if h["first_seen"] >= last7 else prior).update(ws)
+    nweek = max(sum(1 for h in history if h["first_seen"] >= last7), 1)
+    nprior = max(len(history) - nweek, 1)
+    emerging = sorted(((w, c, round((c / nweek) / ((prior[w] + 1) / nprior), 1)) for w, c in week.items() if c >= 3),
+                      key=lambda x: -x[2])[:20]
+    pair = Counter()
+    tagcount = Counter()
+    for h in history:
+        t = h.get("tags", [])
+        tagcount.update(t)
+        for i in range(len(t)):
+            for j in range(i + 1, len(t)):
+                pair[tuple(sorted((t[i], t[j])))] += 1
+    gaps = []
+    tl = [t for t, c in tagcount.most_common(14)]
+    for i, a in enumerate(tl):
+        for b in tl[i + 1:]:
+            exp = tagcount[a] * tagcount[b] / max(len(history), 1)
+            obs = pair.get(tuple(sorted((a, b))), 0)
+            if exp >= 3 and obs < exp * 0.5:
+                gaps.append({"a": a, "b": b, "observed": obs, "expected": round(exp, 1)})
+    gaps = sorted(gaps, key=lambda g: g["observed"] - g["expected"])[:8]
+
+    payload = {
+        "generated": NOW.strftime("%Y-%m-%d %H:%M UTC"),
+        "today": iso(TODAY),
+        "new_today": len(new),
+        "total_items": len(history),
+        "items": [{k: h.get(k) for k in fields if k != "origin"} for h in recent],
+        "groups": [{"id": g["id"], "name": g["name"], "site": g["site"], "mine": g.get("mine", False)} for g in CFG["groups"]],
+        "github": github_repos,
+        "signals": {
+            "emerging_terms": [{"term": w, "count": c, "lift": l} for w, c, l in emerging],
+            "tag_counts": tagcount.most_common(20),
+            "underexplored_pairs": gaps,
+            "by_section_7d": Counter(h["section"] for h in history if h["first_seen"] >= last7).most_common(),
+            "by_day": sorted(Counter(h["first_seen"] for h in history).items())[-30:],
+        },
+        "fetch_log": [m for m in LOG if m.startswith("FAIL")][:20],
+    }
+    (out / "latest.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    log(f"wrote {len(recent)} items to latest.json; total {len(history)}")
+
+
+if __name__ == "__main__":
+    main()

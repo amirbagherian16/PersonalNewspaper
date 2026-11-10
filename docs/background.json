@@ -1,0 +1,28 @@
+[
+  {"title": "Core concepts", "entries": [
+    {"title": "What mechanically injures the brain", "body": "Impact and inertial loading produce linear and rotational head motion. Rotational acceleration drives shear deformation of white matter, linked to diffuse axonal injury. Injury is usually tied to tissue strain and strain rate rather than peak head acceleration alone."},
+    {"title": "Injury metrics", "body": "Head-based metrics include peak linear acceleration, peak angular velocity and acceleration, HIC (Head Injury Criterion), and BrIC (Brain Injury Criterion, built on angular velocity). Tissue-based metrics use finite element results such as maximum principal strain, strain rate, or cumulative strain damage measures. Proposed thresholds vary by study, species and region, so treat any single number with caution."},
+    {"title": "Mild versus severe TBI", "body": "Clinical severity is often graded with the Glasgow Coma Scale. Concussion is mild TBI with a functional (not structural) clinical picture, typically without visible CT findings. Severe TBI involves prolonged unconsciousness, intracranial pressure management and neurocritical care."},
+    {"title": "Repetitive head impacts and CTE", "body": "Subconcussive exposure over years is associated with chronic traumatic encephalopathy neuropathology, which is currently diagnosed only post-mortem. Exposure measurement (sensors, position, years played) is a major research focus."},
+    {"title": "Blast TBI", "body": "Blast involves primary (overpressure wave), secondary (fragments), tertiary (acceleration) and quaternary mechanisms. How the pressure wave couples to the brain is still debated, which is why modeling and shock-tube experiments matter."}
+  ]},
+  {"title": "Methods in your field", "entries": [
+    {"title": "Finite element head models", "body": "Widely used models include GHBMC, THUMS, the KTH head model, SIMon and group-specific models (Imperial, Penn State, WPI, Stanford). Differences in meshing, material laws and validation data (e.g. cadaver brain-motion datasets) drive differences in predicted strain."},
+    {"title": "Hexahedral meshing from imaging", "body": "Hex meshes behave well for large-deformation brain tissue but are hard to build per subject. Automatic mesh generation, like your AnatoMesh platform, removes the main barrier to subject-specific modeling.", "url": "https://github.com/memar-lab/AnatoMesh"},
+    {"title": "ML surrogates for FE models", "body": "Surrogates learn the map from impact kinematics to brain response (peak or spatial strain), cutting minutes-to-hours of simulation to milliseconds. Key issues are generalization across head shapes and loading, and uncertainty reporting.", "url": "https://github.com/memar-lab/Surrogate-Pig-Head-FEM-ML"},
+    {"title": "Instrumented mouthguards", "body": "Mouthguards couple to the upper teeth, giving better skull coupling than helmet or skin patches. Commercial and academic systems come from groups like Stanford (Camarillo), Prevent Biometrics and others. Validation against video and lab impacts is key."},
+    {"title": "Animal models", "body": "Large-animal (porcine, ovine) and rodent models give controlled kinematics, histology and behavior. Porcine brains have gyrencephalic anatomy and white-matter proportions closer to humans than rodents, which motivates cross-species scaling work."}
+  ]},
+  {"title": "Clinical landscape", "entries": [
+    {"title": "Blood biomarkers", "body": "GFAP and UCH-L1 are used to help decide whether a head CT is needed after mild TBI, and regulators have cleared blood tests for this use. Neurofilament light and tau are studied for prognosis and chronic effects."},
+    {"title": "Large clinical studies", "body": "CENTER-TBI (Europe) and TRACK-TBI (US) are the large observational cohorts that anchor outcome, imaging and biomarker work."},
+    {"title": "Return-to-play and consensus statements", "body": "The Concussion in Sport Group issues international consensus statements on diagnosis and return to sport. Check for the latest edition when planning sports-facing work."}
+  ]},
+  {"title": "Where to publish and meet", "entries": [
+    {"title": "Journals", "body": "Annals of Biomedical Engineering, Journal of Neurotrauma, Journal of Biomechanics, Biomechanics and Modeling in Mechanobiology, Brain Multiphysics, Journal of Neurosurgery, Journal of Neurotrauma Reports, Scientific Reports, and sports medicine journals such as BJSM and AJSM."},
+    {"title": "Conferences", "body": "IRCOBI, Stapp Car Crash Conference, BMES, ASB, World Congress of Biomechanics, National Neurotrauma Society, Military Health System Research Symposium, and Concussion in Sport meetings. Check each for current deadlines."}
+  ]},
+  {"title": "Your lab's work", "entries": [
+    {"title": "Memar Lab on GitHub", "body": "AnatoMesh (hex mesh generation), Surrogate Pig Head FEM-ML plus its web version, and astrocyte segmentation with UNet++/VGG19.", "url": "https://github.com/memar-lab"}
+  ]}
+]
