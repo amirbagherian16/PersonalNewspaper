@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Pushes only redeploy the committed (encrypted) files; the data refresh needs the SITE_PASSWORD secret.
+    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,7 +51,7 @@ jobs:
 
   deploy:
     needs: [build]
-    if: needs.build.result == 'success'
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
       name: github-pages
