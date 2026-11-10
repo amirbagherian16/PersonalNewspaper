@@ -291,6 +291,77 @@ def keywords(text):
     return [w for w in re.findall(r"[a-z][a-z\-]{3,}", text.lower()) if w not in STOP]
 
 
+
+# ---------------------------------------------------------------- Images + real links
+BROWSER_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
+
+
+def resolve_gnews(url):
+    """Turn a news.google.com article link into the publisher URL (best effort)."""
+    gid = url.rstrip("/").split("/")[-1].split("?")[0]
+    sg = ts = None
+    for base in ("https://news.google.com/articles/%s", "https://news.google.com/rss/articles/%s"):
+        raw = get(base % gid, retries=0, timeout=15, headers=BROWSER_UA)
+        if not raw:
+            continue
+        b = raw.decode("utf-8", "ignore")
+        sg, ts = re.search(r'data-n-a-sg="([^"]+)"', b), re.search(r'data-n-a-ts="([^"]+)"', b)
+        if sg and ts:
+            break
+    if not (sg and ts):
+        return None
+    arr = json.dumps(["garturlreq", [["X", "X", ["X", "X"], None, None, 1, 1, "US:en", None, 1, None, None, None, None, None, 0, 1],
+                                     "X", "X", 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0], gid, int(ts.group(1)), sg.group(1)])
+    body = "f.req=" + urllib.parse.quote(json.dumps([[["Fbv4je", arr, None, "generic"]]]))
+    try:
+        req = urllib.request.Request("https://news.google.com/_/DotsSplashUi/data/batchexecute", data=body.encode(),
+                                     headers={**BROWSER_UA, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"})
+        t = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore")
+    except Exception:
+        return None
+    m = re.search(r'garturlres\\",\\"(.*?)\\"', t)
+    return m.group(1).encode().decode("unicode_escape") if m else None
+
+
+def og_image(url):
+    raw = get(url, retries=0, timeout=12, headers=BROWSER_UA)
+    if not raw:
+        return None
+    b = raw[:300000].decode("utf-8", "ignore")
+    pat1 = r"""<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)"""
+    pat2 = r"""content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)"""
+    m = re.search(pat1, b) or re.search(pat2, b)
+    img = html.unescape(m.group(1)) if m else None
+    if img and img.startswith("//"):
+        img = "https:" + img
+    return img if img and img.startswith("http") else None
+
+
+def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=420):
+    t0, done = time.time(), 0
+    for it in history:  # history is sorted newest first
+        if done >= cap or time.time() - t0 > budget_s:
+            break
+        if it.get("enriched") or it["source_type"] not in ("news", "linkedin") and not it["id"].startswith("hn:"):
+            continue
+        done += 1
+        it["enrich_tries"] = it.get("enrich_tries", 0) + 1
+        try:
+            url = it["url"]
+            if "news.google.com" in url:
+                real = resolve_gnews(url)
+                if not real:
+                    it["enriched"] = it["enrich_tries"] >= 3  # retry on later runs (rate limits)
+                    time.sleep(1.0)
+                    continue
+                it["url"] = url = real
+            it["enriched"] = True
+            it["img"] = og_image(url)
+        except Exception as e:  # noqa
+            log(f"enrich fail: {e}")
+        time.sleep(0.6)
+    log(f"enriched {done} items in {time.time() - t0:.0f}s")
+
 # ---------------------------------------------------------------- main
 def main():
     hist_path = ROOT / "data" / "items.json"
@@ -356,13 +427,14 @@ def main():
     log(f"candidates={len(items)} new={len(new)} history_before={len(history)}")
     history.extend(new)
     history.sort(key=lambda x: (x["first_seen"], x["date"]), reverse=True)
+    enrich(history)
     (ROOT / "data").mkdir(exist_ok=True)
     hist_path.write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
 
     # ------------------------------------------------ outputs
     out = ROOT / "docs" / "data"
     out.mkdir(parents=True, exist_ok=True)
-    fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "summary"]
+    fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "img", "summary"]
     with open(out / "dataset.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(fields)
