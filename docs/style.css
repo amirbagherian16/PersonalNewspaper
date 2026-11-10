@@ -29,6 +29,7 @@ nav a:hover{background:var(--chip)}nav a.on{background:var(--acc);color:var(--ac
 main{flex:1;min-height:0;padding:12px;display:flex}
 .cols{display:grid;gap:12px;width:100%;min-height:0;grid-template-columns:260px minmax(0,1fr) 320px}
 .cols.two{grid-template-columns:300px minmax(0,1fr)}
+.cols.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .cols.twoeq{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .panel>h3{margin:0;padding:12px 14px 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
@@ -62,10 +63,10 @@ input[type=search],select{width:100%;padding:8px 10px;border:1px solid var(--lin
 .toc a{display:block;padding:7px 10px;border-radius:9px;color:var(--fg);text-decoration:none}.toc a:hover,.toc a.on{background:var(--chip)}
 .mobhint{display:none}
 footer{font-size:11px;color:var(--mut);text-align:center;padding:4px 8px 8px}
-@media(max-width:1100px){.cols{grid-template-columns:240px minmax(0,1fr)}.cols>.panel:nth-child(3){display:none}}
+@media(max-width:1100px){.cols.three{grid-template-columns:1fr 1fr}.cols{grid-template-columns:240px minmax(0,1fr)}.cols:not(.three)>.panel:nth-child(3){display:none}}
 @media(max-width:760px){
   .app{height:auto;min-height:100dvh}main{display:block;padding:8px}
-  .cols,.cols.two,.cols.twoeq{display:block}.cols>.panel{margin-bottom:10px;overflow:visible}.cols>.panel:nth-child(3){display:flex}
+  .cols,.cols.two,.cols.twoeq,.cols.three{display:block}.cols>.panel{margin-bottom:10px;overflow:visible}.cols>.panel:nth-child(3){display:flex}
   .scroll{overflow:visible}.panel.filters .scroll{max-height:190px;overflow-y:auto}
   .card{grid-template-columns:minmax(0,1fr) 92px}.thumb{width:92px;height:72px}.top{position:sticky;top:0;z-index:5}
   .brand{font-size:21px}.scrollpanel .scroll{max-height:none}

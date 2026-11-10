@@ -1,6 +1,8 @@
-const TABS=[['today','Today'],['groups','Groups'],['brainstorm','Brainstorm'],['background','Background'],['dataset','Dataset']];
+const TABS=[['today','Today'],['groups','Groups'],['funding','Funding'],['brainstorm','Brainstorm'],['background','Background'],['dataset','Dataset']];
 const SEC={contact_sport:'Contact sport',biomechanics_modeling:'Biomechanics & modeling',blast_military:'Blast & military',medical_clinical:'Medical & clinical',general_tbi:'General TBI'};
-const TYPE={paper:'Paper',preprint:'Preprint',news:'News',linkedin:'LinkedIn',social:'Social',github:'GitHub'};
+const TYPE={paper:'Paper',preprint:'Preprint',news:'News',linkedin:'LinkedIn',social:'Social',github:'GitHub',grant:'Grant award',opportunity:'Open call',funding_news:'Funding news'};
+const FEED_TYPES=['paper','preprint','news','funding_news','linkedin','social','github'];
+const NOFEED=['grant','opportunity'];
 const COL={contact_sport:['#f08c3a','#8a2d12'],biomechanics_modeling:['#4aa3d8','#14375e'],blast_military:['#b56ab0','#3d1840'],medical_clinical:['#3bbd8e','#0d4a3a'],general_tbi:['#8f95e8','#2a2c66']};
 const $=s=>document.querySelector(s);let D=null,IDEAS=null,BG=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -35,7 +37,7 @@ const mini=i=>`<div class="mini">${img(i,'')}<div><a href="${esc(safe(i.url))}" 
 /* ---------- TODAY ---------- */
 const S={q:'',sec:'',type:'',day:'',grp:''};
 function today(){
- const items=D.items;const days=[...new Set(items.map(i=>i.first_seen))].sort().reverse().slice(0,21);
+ const items=D.items.filter(i=>!NOFEED.includes(i.source_type));const days=[...new Set(items.map(i=>i.first_seen))].sort().reverse().slice(0,21);
  if(!S.day&&S.day!=='all')S.day=days[0]||'all';
  $('#main').innerHTML=`<div class="cols">
  <section class="panel filters"><h3>Browse</h3><div class="scroll" id="fl"></div></section>
@@ -46,7 +48,7 @@ function today(){
   $('#fl').innerHTML=`<input type="search" id="q" placeholder="Search…" value="${esc(S.q)}">
   <select id="fd">${days.map(d=>`<option value="${d}" ${S.day===d?'selected':''}>${d}${d===D.today?' (today)':''}</option>`).join('')}<option value="all" ${S.day==='all'?'selected':''}>All days (45d)</option></select>
   <div class="sec"><h4>Section</h4><button class="fbtn ${!S.sec?'on':''}" data-k="sec" data-v="">All <span class="n">${b.length}</span></button>${Object.entries(SEC).map(([k,v])=>`<button class="fbtn ${S.sec===k?'on':''}" data-k="sec" data-v="${k}"><span><i class="dot" style="background:var(--s-${k})"></i>${v}</span><span class="n">${b.filter(i=>i.section===k).length}</span></button>`).join('')}</div>
-  <div class="sec"><h4>Source</h4><button class="fbtn ${!S.type?'on':''}" data-k="type" data-v="">All</button>${Object.entries(TYPE).map(([k,v])=>`<button class="fbtn ${S.type===k?'on':''}" data-k="type" data-v="${k}">${v}<span class="n">${b.filter(i=>i.source_type===k).length}</span></button>`).join('')}</div>
+  <div class="sec"><h4>Source</h4><button class="fbtn ${!S.type?'on':''}" data-k="type" data-v="">All</button>${FEED_TYPES.map(k=>[k,TYPE[k]]).map(([k,v])=>`<button class="fbtn ${S.type===k?'on':''}" data-k="type" data-v="${k}">${v}<span class="n">${b.filter(i=>i.source_type===k).length}</span></button>`).join('')}</div>
   <div class="sec"><h4>Group</h4><button class="fbtn ${!S.grp?'on':''}" data-k="grp" data-v="">Any</button>${D.groups.map(g=>`<button class="fbtn ${S.grp===g.id?'on':''}" data-k="grp" data-v="${g.id}">${esc(g.name.split(/ [-(]/)[0])}<span class="n">${b.filter(i=>i.groups.includes(g.id)).length}</span></button>`).join('')}</div>`;
   $('#q').oninput=e=>{S.q=e.target.value;feed();const p=e.target.selectionStart;filters();$('#q').focus();$('#q').setSelectionRange(p,p)};
   $('#fd').onchange=e=>{S.day=e.target.value;feed();filters()};
@@ -77,6 +79,28 @@ function groups(){GSEL=GSEL||D.groups[0].id;
    <div class="sec"><h4>News & mentions (${news.length})</h4>${news.length?news.slice(0,15).map(i=>card(i)).join(''):'<p class="empty">No news found recently.</p>'}</div>`;$('#gd').scrollTop=0};
  draw()}
 
+
+/* ---------- FUNDING ---------- */
+const FS={q:'',mine:false};
+function fcard(i){const m=i.summary.split(' | ');const amt=(m.find(x=>/^\$/.test(x))||'');
+ return `<div class="card noimg"><div><h4>${link(i)}</h4><div class="meta">${esc(i.outlet)} · ${esc(i.date)}${i.deadline?` · <b>closes ${esc(i.deadline)}</b>`:''}</div>
+ <p class="sum">${esc(i.source_type==='grant'?m.slice(0,3).join(' · '):i.summary)}</p><div>${amt?`<span class="chip mine">${esc(amt)}</span>`:''}${i.groups.map(g=>`<span class="chip ${(D.groups.find(x=>x.id===g)||{}).mine?'mine':'g'}">${esc(gname(g).split(/ [-(]/)[0])}</span>`).join('')}<span class="chip">${esc(TYPE[i.source_type])}</span></div></div></div>`}
+function funding(){
+ $('#main').innerHTML=`<div class="cols three"><section class="panel scrollpanel"><h3><span id="c1"></span><span class="meta">grants.gov</span></h3><div class="scroll" id="f1"></div></section>
+ <section class="panel scrollpanel"><h3><span id="c2"></span><span class="meta">NIH RePORTER · NSF</span></h3><div class="scroll" id="f2"></div></section>
+ <section class="panel scrollpanel"><h3><span id="c3"></span><span class="meta">news</span></h3><div class="scroll" id="f3"></div></section></div>`;
+ const bar=`<div style="display:flex;gap:8px"><input type="search" id="fq" placeholder="Search funding…" value="${esc(FS.q)}"><button class="iconbtn" id="fm" style="width:auto;padding:0 12px;height:36px;font-size:12px;${FS.mine?'background:var(--acc);color:var(--acc-fg)':''}" title="Only your lab and tracked groups">Groups</button></div>`;
+ const draw=()=>{const ok=i=>(!FS.q||(i.title+' '+i.summary).toLowerCase().includes(FS.q.toLowerCase()))&&(!FS.mine||i.groups.length);
+  const f=t=>D.items.filter(i=>i.source_type===t&&ok(i)).sort((a,b)=>(isMine(b)-isMine(a))||b.date.localeCompare(a.date));
+  const o=f('opportunity').sort((a,b)=>(a.deadline||'9999').localeCompare(b.deadline||'9999')),g=f('grant'),n=f('funding_news');
+  $('#c1').textContent=`Open calls (${o.length})`;$('#c2').textContent=`Recent awards (${g.length})`;$('#c3').textContent=`Wins & funding news (${n.length})`;
+  $('#f1').innerHTML=bar+(o.length?o.slice(0,80).map(fcard).join(''):'<p class="empty">No open calls found.</p>');
+  $('#f2').innerHTML=g.length?g.slice(0,120).map(fcard).join(''):'<p class="empty">No awards found.</p>';
+  $('#f3').innerHTML=n.length?n.slice(0,60).map(i=>card(i)).join(''):'<p class="empty">No funding news yet.</p>';
+  $('#fq').oninput=e=>{FS.q=e.target.value;const p=e.target.selectionStart;draw();$('#fq').focus();$('#fq').setSelectionRange(p,p)};
+  $('#fm').onclick=()=>{FS.mine=!FS.mine;draw()}};
+ draw()}
+
 /* ---------- BRAINSTORM ---------- */
 let BTAB='research';
 function brainstorm(){const s=D.signals,mx=Math.max(...s.tag_counts.map(t=>t[1]),1);
@@ -101,7 +125,7 @@ function dataset(){const rows=D.items;const c=k=>Object.entries(rows.reduce((a,i
  <section class="panel scrollpanel"><h3>Latest items<span class="meta">${D.total_items} total</span></h3><div class="scroll" style="padding:0"><table class="tbl"><tr><th>Date</th><th>Section</th><th>Type</th><th>Title</th><th>Tags</th></tr>${rows.slice(0,400).map(i=>`<tr><td>${esc(i.date)}</td><td>${esc(SEC[i.section]||i.section)}</td><td>${esc(i.source_type)}</td><td><a href="${esc(safe(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.tags.join(', '))}</td></tr>`).join('')}</table></div></section></div>`}
 
 /* ---------- boot ---------- */
-function route(){const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v])=>`<a href="#${k}" class="${k===h?'on':''}">${v}</a>`).join('');({today,groups,brainstorm,background,dataset}[h]||today)()}
+function route(){const h=(location.hash||'#today').slice(1);$('#nav').innerHTML=TABS.map(([k,v])=>`<a href="#${k}" class="${k===h?'on':''}">${v}</a>`).join('');({today,groups,funding,brainstorm,background,dataset}[h]||today)()}
 $('#theme').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;const n=dark?'light':'dark';r.dataset.theme=n;store.set('theme',n)};
 Promise.all(['data/latest.json','ideas.json','background.json'].map(u=>fetch(u,{cache:'no-cache'}).then(r=>r.json()))).then(([d,i,b])=>{D=d;IDEAS=i;BG=b;
  $('#sub').textContent=`Updated ${D.generated} · ${D.new_today} new today`;route();addEventListener('hashchange',route)})

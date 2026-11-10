@@ -7,6 +7,7 @@ A personal, automatically updated newspaper on traumatic brain injury (TBI), foc
 ## Tabs
 - **Today**: new papers, preprints, news, LinkedIn posts and social items; filter by section, source and day.
 - **Groups**: Memar Lab, HEAD Lab (Imperial), Kraft/Penn State, Ji Lab (WPI), Camarillo (Stanford), AWS x NFL, Prevent Biometrics and Biocore. Papers via PubMed author search, news via Google News, repo activity via GitHub.
+- **Funding**: open calls (Grants.gov), recent awards (NIH RePORTER, NSF, including your lab and tracked PIs), and grant/award news.
 - **Brainstorm**: data-driven signals (topic volume, emerging terms, under-explored topic pairs) plus curated research and market ideas.
 - **Background**: primer on mechanisms, metrics, methods, clinical landscape and venues.
 - **Dataset**: categorized dataset (`docs/data/dataset.csv` and `.jsonl`), grown daily and de-duplicated.

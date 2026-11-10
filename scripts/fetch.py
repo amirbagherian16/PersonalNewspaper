@@ -292,6 +292,72 @@ def keywords(text):
 
 
 
+
+# ---------------------------------------------------------------- Funding: NIH RePORTER, NSF, Grants.gov, news
+FUND_RE = re.compile(r"grant|fund|award|prize|fellowship|\$\s?\d|million|SBIR|STTR|NIH|\bNSF\b|DoD|CDMRP|wins|receives|donat|endow", re.I)
+
+
+def post_json(url, payload, timeout=40):
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "User-Agent": UA})
+        return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+    except Exception as e:  # noqa
+        log(f"FAIL {url[:80]} -> {e}")
+        return None
+
+
+def nih_reporter(criteria, groups=None, days=75, section="general_tbi"):
+    crit = dict(criteria)
+    crit["award_notice_date"] = {"from_date": iso(TODAY - timedelta(days=days)), "to_date": iso(TODAY)}
+    d = post_json("https://api.reporter.nih.gov/v2/projects/search",
+                  {"criteria": crit, "limit": 100, "sort_field": "award_notice_date", "sort_order": "desc"})
+    time.sleep(0.5)
+    for r in (d or {}).get("results", []):
+        pis = ", ".join(p.get("full_name", "").strip() for p in r.get("principal_investigators") or [])[:120]
+        amt = r.get("award_amount")
+        org = (r.get("organization") or {}).get("org_name", "")
+        agency = (r.get("agency_ic_admin") or {}).get("abbreviation") or r.get("agency_code") or "NIH"
+        add(id="nih:" + str(r.get("project_num")) + (r.get("award_notice_date") or "")[:10], source_type="grant", section=section,
+            date=(r.get("award_notice_date") or iso(TODAY))[:10], title=r.get("project_title", ""),
+            url=r.get("project_detail_url") or "https://reporter.nih.gov/", outlet=f"NIH RePORTER · {agency}",
+            summary=f"{org} | PI: {pis} | {('$' + format(int(amt), ',')) if amt else 'amount n/a'} | FY{r.get('fiscal_year')} | " + clean(r.get("abstract_text") or ""),
+            groups=list(groups or []))
+
+
+def nsf_awards(keyword, days=75):
+    frm = (TODAY - timedelta(days=days)).strftime("%m/%d/%Y")
+    raw = get("https://api.nsf.gov/services/v1/awards.json?" + urllib.parse.urlencode(
+        {"keyword": f'"{keyword}"', "dateStart": frm, "printFields": "id,title,awardeeName,fundsObligatedAmt,date,piFirstName,piLastName,abstractText"}))
+    time.sleep(0.4)
+    if not raw:
+        return
+    for a in json.loads(raw).get("response", {}).get("award", []) or []:
+        try:
+            dt = datetime.strptime(a["date"], "%m/%d/%Y").strftime("%Y-%m-%d")
+        except Exception:
+            dt = iso(TODAY)
+        add(id="nsf:" + a["id"], source_type="grant", section="general_tbi", date=dt, title=a["title"],
+            url=f"https://www.nsf.gov/awardsearch/showAward?AWD_ID={a['id']}", outlet="NSF Award Search",
+            summary=f"{a.get('awardeeName', '')} | PI: {a.get('piFirstName', '')} {a.get('piLastName', '')} | ${a.get('fundsObligatedAmt', 'n/a')} | " + clean(a.get("abstractText", "")))
+
+
+def to_iso(mdy):
+    try:
+        return datetime.strptime(mdy, "%m/%d/%Y").strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def grants_gov(keyword):
+    d = post_json("https://api.grants.gov/v1/api/search2", {"keyword": keyword, "oppStatuses": "forecasted|posted", "rows": 30})
+    time.sleep(0.5)
+    for h in ((d or {}).get("data") or {}).get("oppHits", []):
+        close = to_iso(h.get("closeDate", ""))
+        add(id="opp:" + str(h["id"]), source_type="opportunity", section="general_tbi", date=to_iso(h.get("openDate", "")) or iso(TODAY),
+            title=h.get("title", ""), url=f"https://www.grants.gov/search-results-detail/{h['id']}",
+            outlet=h.get("agency") or "Grants.gov", deadline=close,
+            summary=f"{h.get('oppStatus', '')} | opens {h.get('openDate', 'n/a')} | closes {h.get('closeDate') or 'rolling / n/a'} | #{h.get('number', '')}")
+
 # ---------------------------------------------------------------- Images + real links
 BROWSER_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
 
@@ -342,7 +408,7 @@ def enrich(history, cap=int(os.environ.get("ENRICH_CAP", 70)), budget_s=420):
     for it in history:  # history is sorted newest first
         if done >= cap or time.time() - t0 > budget_s:
             break
-        if it.get("enriched") or it["source_type"] not in ("news", "linkedin") and not it["id"].startswith("hn:"):
+        if it.get("enriched") or it["source_type"] not in ("news", "linkedin", "funding_news") and not it["id"].startswith("hn:"):
             continue
         done += 1
         it["enrich_tries"] = it.get("enrich_tries", 0) + 1
@@ -369,6 +435,17 @@ def main():
     seen = {h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history}
 
     backfill = not history  # first run: seed group tabs with a longer window
+    bf_groups = set(filter(None, os.environ.get("BACKFILL_GROUPS", "").split(",")))
+    purge = os.environ.get("PURGE_GROUP")
+    if purge:  # drop mis-attributed papers for a group (e.g. after tightening its author queries)
+        for h in history:
+            if purge in h.get("groups", []) and h["source_type"] in ("paper", "preprint"):
+                h["groups"] = [x for x in h["groups"] if x != purge]
+                if not h["groups"]:
+                    h["_drop"] = True
+        history[:] = [h for h in history if not h.get("_drop")]
+        seen.clear()
+        seen.update({h["id"] for h in history} | {"t:" + norm_title(h["title"]) for h in history})
     gdays = 365 if backfill else max(LOOKBACK, 14)
     ndays = 30 if backfill else max(LOOKBACK, 7)
     # 1. topics
@@ -383,7 +460,7 @@ def main():
     github_repos = {}
     for g in CFG["groups"]:
         for q in g.get("pubmed_authors", []):
-            pubmed(q, "group_update", groups=[g["id"]], days=gdays)
+            pubmed(q, "group_update", groups=[g["id"]], days=365 if (backfill or g["id"] in bf_groups) else gdays)
         toks = [t for t in re.findall(r"[A-Za-z]{4,}", " ".join(g["news"]).lower()) if t not in
                 {"brain", "injury", "head", "lab", "mouthguard", "concussion", "biomechanics", "helmet", "simulation",
                  "traumatic", "research", "stanford", "penn", "state", "college", "imperial", "testing", "laboratory",
@@ -391,8 +468,23 @@ def main():
         keep = re.compile("|".join(sorted(set(toks))) if toks else ".", re.I)
         for q in g["news"]:
             gnews(q, "group_update", groups=[g["id"]], days=ndays, keep=keep, limit=15)
+        for pi in g.get("nih_pi", []):
+            nih_reporter({"pi_names": [pi]}, groups=[g["id"]], days=365 if (backfill or g["id"] in bf_groups) else CFG["funding"]["nih_days"])
         if g.get("github"):
             github_repos[g["id"]] = github_user(g["github"], g["id"])
+    # 2b. funding
+    F = CFG["funding"]
+    for t in F["nih_text"]:
+        nih_reporter({"advanced_text_search": {"operator": t["op"], "search_field": "projecttitle,terms,abstracttext", "search_text": t["text"]}},
+                     days=F["nih_backfill_days"] if (backfill or os.environ.get("BACKFILL_FUNDING")) else F["nih_days"])
+    for k in F["nsf_keywords"]:
+        nsf_awards(k, F["nih_backfill_days"] if (backfill or os.environ.get("BACKFILL_FUNDING")) else F["nih_days"])
+    for k in F["grants_gov_keywords"]:
+        grants_gov(k)
+    for q in F["news"]:
+        gnews(q, "general_tbi", source_type="funding_news", days=30 if backfill else 7,
+              keep=re.compile(REL.pattern + "|brain|head injur", re.I), limit=12)
+    items[:] = [i for i in items if i["source_type"] != "funding_news" or FUND_RE.search(i["title"])]
     # 3. social
     for q in CFG["social"]["linkedin_queries"]:
         gnews(f"site:linkedin.com {q}", "general_tbi", source_type="linkedin", days=7, keep=REL, limit=12)
@@ -416,13 +508,11 @@ def main():
         classify(it)
         it["origin"] = orig_section
         it["first_seen"] = iso(TODAY)
-        # tag mentions of groups in titles/summaries
+        # tag mentions of groups (explicit aliases only; ambiguous names are not matched)
         blob = f"{it['title']} {it['summary']}".lower()
         for g in CFG["groups"]:
-            for q in g["news"] + g.get("pubmed_authors", []):
-                nm = re.sub(r"\[.*?\]|\(.*?\)|AND.*", "", q).strip().lower()
-                if len(nm) > 6 and nm in blob and g["id"] not in it["groups"]:
-                    it["groups"].append(g["id"])
+            if g["id"] not in it["groups"] and any(al in blob for al in g.get("aliases", [])):
+                it["groups"].append(g["id"])
         new.append(it)
     log(f"candidates={len(items)} new={len(new)} history_before={len(history)}")
     history.extend(new)
@@ -434,7 +524,7 @@ def main():
     # ------------------------------------------------ outputs
     out = ROOT / "docs" / "data"
     out.mkdir(parents=True, exist_ok=True)
-    fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "img", "summary"]
+    fields = ["id", "date", "first_seen", "source_type", "section", "origin", "tags", "sports", "groups", "title", "outlet", "url", "img", "deadline", "summary"]
     with open(out / "dataset.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(fields)
@@ -445,7 +535,8 @@ def main():
             f.write(json.dumps({k: h.get(k) for k in fields}, ensure_ascii=False) + "\n")
 
     cutoff = iso(TODAY - timedelta(days=CFG["history_days_on_site"]))
-    recent = [h for h in history if h["first_seen"] >= cutoff or h.get("groups")]
+    recent = [h for h in history if h["first_seen"] >= cutoff or h.get("groups") or h["source_type"] == "opportunity"]
+    recent = [h for h in recent if not (h["source_type"] == "opportunity" and h.get("deadline") and h["deadline"] < iso(TODAY))]
     last7 = iso(TODAY - timedelta(days=7))
     # trend signals (rule-based, free)
     week, prior = Counter(), Counter()

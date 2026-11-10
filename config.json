@@ -1,55 +1,299 @@
 {
-  "lookback_days": 3,
-  "history_days_on_site": 45,
-  "topics": {
-    "contact_sport": {
-      "pubmed": ["(concussion OR \"head impact\" OR \"repetitive head impact\" OR subconcussive) AND (football OR soccer OR rugby OR hockey OR boxing OR athlete* OR sport*)", "instrumented mouthguard OR \"helmet sensor\" OR \"head impact telemetry\""],
-      "news": ["concussion football", "concussion rugby", "concussion soccer heading", "CTE chronic traumatic encephalopathy", "NFL concussion helmet", "youth sports concussion", "instrumented mouthguard", "head impact sensor"],
-      "preprint": ["concussion OR \"head impact\" OR subconcussive"]
-    },
-    "biomechanics_modeling": {
-      "pubmed": ["(\"finite element\" OR \"computational model\" OR biomechanics) AND (brain OR head) AND (injury OR impact)", "(\"machine learning\" OR \"deep learning\" OR surrogate) AND (\"brain injury\" OR concussion) AND (strain OR kinematics OR biomechanic*)"],
-      "news": ["brain injury computer model", "head injury biomechanics", "AI traumatic brain injury prediction"],
-      "preprint": ["\"finite element\" AND (brain OR head) AND (impact OR injury)", "\"traumatic brain injury\" AND (\"machine learning\" OR \"deep learning\")"]
-    },
-    "blast_military": {
-      "pubmed": ["(blast OR \"blast-induced\" OR \"blast overpressure\") AND (\"brain injury\" OR neurotrauma)", "military AND \"traumatic brain injury\" AND (veteran* OR \"service member*\")"],
-      "news": ["blast traumatic brain injury", "veterans brain injury blast overpressure", "military TBI research"],
-      "preprint": ["blast AND (\"brain injury\" OR neurotrauma)"]
-    },
-    "medical_clinical": {
-      "pubmed": ["\"traumatic brain injury\" AND (biomarker* OR GFAP OR \"UCH-L1\" OR \"neurofilament\" OR \"tau\")", "\"traumatic brain injury\" AND (trial OR guideline OR \"intracranial pressure\" OR neurocritical OR rehabilitation OR \"cognitive\")", "\"traumatic brain injury\" AND (pediatric OR children OR elderly OR \"older adults\") AND outcome*"],
-      "news": ["traumatic brain injury treatment", "TBI blood test", "traumatic brain injury study", "brain injury FDA", "concussion recovery study"],
-      "preprint": ["\"traumatic brain injury\" AND (biomarker OR clinical OR outcome)"]
-    },
-    "general_tbi": {
-      "pubmed": ["\"traumatic brain injury\"[Title/Abstract] OR neurotrauma[Title/Abstract]"],
-      "news": ["traumatic brain injury", "TBI research breakthrough"],
-      "preprint": ["\"traumatic brain injury\""]
-    }
+ "lookback_days": 3,
+ "history_days_on_site": 45,
+ "topics": {
+  "contact_sport": {
+   "pubmed": [
+    "(concussion OR \"head impact\" OR \"repetitive head impact\" OR subconcussive) AND (football OR soccer OR rugby OR hockey OR boxing OR athlete* OR sport*)",
+    "instrumented mouthguard OR \"helmet sensor\" OR \"head impact telemetry\""
+   ],
+   "news": [
+    "concussion football",
+    "concussion rugby",
+    "concussion soccer heading",
+    "CTE chronic traumatic encephalopathy",
+    "NFL concussion helmet",
+    "youth sports concussion",
+    "instrumented mouthguard",
+    "head impact sensor"
+   ],
+   "preprint": [
+    "concussion OR \"head impact\" OR subconcussive"
+   ]
   },
-  "social": {
-    "mastodon_tags": ["concussion", "TBI", "traumaticbraininjury", "braininjury", "CTE"],
-    "linkedin_queries": ["concussion", "traumatic brain injury", "head impact biomechanics", "instrumented mouthguard", "brain injury research"],
-    "hackernews_queries": ["concussion", "brain injury"]
+  "biomechanics_modeling": {
+   "pubmed": [
+    "(\"finite element\" OR \"computational model\" OR biomechanics) AND (brain OR head) AND (injury OR impact)",
+    "(\"machine learning\" OR \"deep learning\" OR surrogate) AND (\"brain injury\" OR concussion) AND (strain OR kinematics OR biomechanic*)"
+   ],
+   "news": [
+    "brain injury computer model",
+    "head injury biomechanics",
+    "AI traumatic brain injury prediction"
+   ],
+   "preprint": [
+    "\"finite element\" AND (brain OR head) AND (impact OR injury)",
+    "\"traumatic brain injury\" AND (\"machine learning\" OR \"deep learning\")"
+   ]
   },
-  "groups": [
-    {"id": "memar", "name": "Memar Lab (UTSA) - YOUR LAB", "mine": true, "site": "https://github.com/memar-lab",
-     "pubmed_authors": ["Hajiaghamemar M[Author]", "Memar M[Author] AND (brain OR head OR injury)", "Bagherian Rekavandi A[Author] AND (brain OR head OR injury)", "Seidi M[Author] AND (brain OR head OR injury)", "Abbasi Ghiri A[Author] AND (brain OR head OR injury)", "Jafari B[Author] AND (brain OR head OR injury)"],
-     "news": ["Marzieh Memar UTSA brain", "Memar Lab UTSA traumatic brain injury"], "github": "memar-lab"},
-    {"id": "headlab", "name": "HEAD Lab - Imperial College (Ghajari)", "site": "https://headlab.org/people/mazdak-ghajari/",
-     "pubmed_authors": ["Ghajari M[Author]"], "news": ["Mazdak Ghajari Imperial College head injury", "HEAD Lab Imperial College head injury"]},
-    {"id": "kraft", "name": "Kraft Lab / Brain Sim Research - Penn State", "site": "https://sites.psu.edu/kraftlab/",
-     "pubmed_authors": ["Kraft RH[Author] AND (brain OR head OR injury)"], "news": ["Reuben Kraft Penn State brain injury", "Penn State Kraft Lab brain simulation"]},
-    {"id": "ji", "name": "Songbai Ji Lab - WPI", "site": "https://wp.wpi.edu/jilab/",
-     "pubmed_authors": ["Ji S[Author] AND (brain OR head OR concussion OR injury) AND (Worcester OR WPI OR biomechanics)"], "news": ["Songbai Ji WPI head injury", "WPI Ji Lab brain biomechanics"]},
-    {"id": "camarillo", "name": "Camarillo Lab - Stanford (mouthguard)", "site": "https://camlab.stanford.edu/",
-     "pubmed_authors": ["Camarillo DB[Author]"], "news": ["David Camarillo Stanford mouthguard", "Stanford instrumented mouthguard concussion"]},
-    {"id": "aws_nfl", "name": "AWS x NFL (Digital Athlete)", "site": "https://www.nfl.com/playerhealthandsafety/",
-     "pubmed_authors": [], "news": ["AWS NFL Digital Athlete", "NFL Amazon Web Services player health injury", "NFL head neck spine committee"]},
-    {"id": "prevent", "name": "Prevent Biometrics (mouthguard)", "site": "https://preventbiometrics.com/",
-     "pubmed_authors": [], "news": ["Prevent Biometrics mouthguard", "Prevent Biometrics concussion"]},
-    {"id": "biocore", "name": "Biocore (biomechanics consulting / helmet testing)", "site": "https://biocore.com/",
-     "pubmed_authors": [], "news": ["Biocore biomechanics helmet", "Biocore NFL helmet laboratory testing"]}
+  "blast_military": {
+   "pubmed": [
+    "(blast OR \"blast-induced\" OR \"blast overpressure\") AND (\"brain injury\" OR neurotrauma)",
+    "military AND \"traumatic brain injury\" AND (veteran* OR \"service member*\")"
+   ],
+   "news": [
+    "blast traumatic brain injury",
+    "veterans brain injury blast overpressure",
+    "military TBI research"
+   ],
+   "preprint": [
+    "blast AND (\"brain injury\" OR neurotrauma)"
+   ]
+  },
+  "medical_clinical": {
+   "pubmed": [
+    "\"traumatic brain injury\" AND (biomarker* OR GFAP OR \"UCH-L1\" OR \"neurofilament\" OR \"tau\")",
+    "\"traumatic brain injury\" AND (trial OR guideline OR \"intracranial pressure\" OR neurocritical OR rehabilitation OR \"cognitive\")",
+    "\"traumatic brain injury\" AND (pediatric OR children OR elderly OR \"older adults\") AND outcome*"
+   ],
+   "news": [
+    "traumatic brain injury treatment",
+    "TBI blood test",
+    "traumatic brain injury study",
+    "brain injury FDA",
+    "concussion recovery study"
+   ],
+   "preprint": [
+    "\"traumatic brain injury\" AND (biomarker OR clinical OR outcome)"
+   ]
+  },
+  "general_tbi": {
+   "pubmed": [
+    "\"traumatic brain injury\"[Title/Abstract] OR neurotrauma[Title/Abstract]"
+   ],
+   "news": [
+    "traumatic brain injury",
+    "TBI research breakthrough"
+   ],
+   "preprint": [
+    "\"traumatic brain injury\""
+   ]
+  }
+ },
+ "social": {
+  "mastodon_tags": [
+   "concussion",
+   "TBI",
+   "traumaticbraininjury",
+   "braininjury",
+   "CTE"
+  ],
+  "linkedin_queries": [
+   "concussion",
+   "traumatic brain injury",
+   "head impact biomechanics",
+   "instrumented mouthguard",
+   "brain injury research"
+  ],
+  "hackernews_queries": [
+   "concussion",
+   "brain injury"
   ]
+ },
+ "groups": [
+  {
+   "id": "memar",
+   "name": "Memar Lab (UTSA) - YOUR LAB",
+   "mine": true,
+   "site": "https://github.com/memar-lab",
+   "pubmed_authors": [
+    "Hajiaghamemar M[Author]",
+    "Memar Marzieh[Author]",
+    "Bagherian Rekavandi A[Author] AND (Texas[Affiliation] OR \"San Antonio\"[Affiliation] OR UTSA[Affiliation]) AND (brain[tiab] OR head[tiab] OR helmet[tiab] OR concussion[tiab] OR impact[tiab] OR biomechanic*[tiab] OR \"finite element\"[tiab] OR neurotrauma[tiab])",
+    "Seidi M[Author] AND (Texas[Affiliation] OR \"San Antonio\"[Affiliation] OR UTSA[Affiliation]) AND (brain[tiab] OR head[tiab] OR helmet[tiab] OR concussion[tiab] OR impact[tiab] OR biomechanic*[tiab] OR \"finite element\"[tiab] OR neurotrauma[tiab])",
+    "Abbasi Ghiri A[Author] AND (Texas[Affiliation] OR \"San Antonio\"[Affiliation] OR UTSA[Affiliation]) AND (brain[tiab] OR head[tiab] OR helmet[tiab] OR concussion[tiab] OR impact[tiab] OR biomechanic*[tiab] OR \"finite element\"[tiab] OR neurotrauma[tiab])",
+    "Jafari B[Author] AND (Texas[Affiliation] OR \"San Antonio\"[Affiliation] OR UTSA[Affiliation]) AND (brain[tiab] OR head[tiab] OR helmet[tiab] OR concussion[tiab] OR impact[tiab] OR biomechanic*[tiab] OR \"finite element\"[tiab] OR neurotrauma[tiab])"
+   ],
+   "news": [
+    "\"Marzieh Memar\" brain",
+    "\"Hajiaghamemar\" brain injury",
+    "\"Memar Lab\" UTSA"
+   ],
+   "github": "memar-lab",
+   "aliases": [
+    "marzieh memar",
+    "hajiaghamemar",
+    "memar lab",
+    "amirhossein bagherian"
+   ],
+   "nih_pi": [
+    {
+     "first_name": "Marzieh",
+     "last_name": "Memar"
+    },
+    {
+     "last_name": "Hajiaghamemar"
+    }
+   ]
+  },
+  {
+   "id": "headlab",
+   "name": "HEAD Lab - Imperial College (Ghajari)",
+   "site": "https://headlab.org/people/mazdak-ghajari/",
+   "pubmed_authors": [
+    "Ghajari M[Author]"
+   ],
+   "news": [
+    "Mazdak Ghajari Imperial College head injury",
+    "HEAD Lab Imperial College head injury"
+   ],
+   "aliases": [
+    "ghajari"
+   ]
+  },
+  {
+   "id": "kraft",
+   "name": "Kraft Lab / Brain Sim Research - Penn State",
+   "site": "https://sites.psu.edu/kraftlab/",
+   "pubmed_authors": [
+    "Kraft RH[Author] AND (brain OR head OR injury)"
+   ],
+   "news": [
+    "Reuben Kraft Penn State brain injury",
+    "Penn State Kraft Lab brain simulation"
+   ],
+   "aliases": [
+    "reuben kraft",
+    "kraft lab"
+   ],
+   "nih_pi": [
+    {
+     "first_name": "Reuben",
+     "last_name": "Kraft"
+    }
+   ]
+  },
+  {
+   "id": "ji",
+   "name": "Songbai Ji Lab - WPI",
+   "site": "https://wp.wpi.edu/jilab/",
+   "pubmed_authors": [
+    "Ji S[Author] AND (brain OR head OR concussion OR injury) AND (Worcester OR WPI OR biomechanics)"
+   ],
+   "news": [
+    "Songbai Ji WPI head injury",
+    "WPI Ji Lab brain biomechanics"
+   ],
+   "aliases": [
+    "songbai ji"
+   ],
+   "nih_pi": [
+    {
+     "first_name": "Songbai",
+     "last_name": "Ji"
+    }
+   ]
+  },
+  {
+   "id": "camarillo",
+   "name": "Camarillo Lab - Stanford (mouthguard)",
+   "site": "https://camlab.stanford.edu/",
+   "pubmed_authors": [
+    "Camarillo DB[Author]"
+   ],
+   "news": [
+    "David Camarillo Stanford mouthguard",
+    "Stanford instrumented mouthguard concussion"
+   ],
+   "aliases": [
+    "camarillo"
+   ],
+   "nih_pi": [
+    {
+     "first_name": "David",
+     "last_name": "Camarillo"
+    }
+   ]
+  },
+  {
+   "id": "aws_nfl",
+   "name": "AWS x NFL (Digital Athlete)",
+   "site": "https://www.nfl.com/playerhealthandsafety/",
+   "pubmed_authors": [],
+   "news": [
+    "AWS NFL Digital Athlete",
+    "NFL Amazon Web Services player health injury",
+    "NFL head neck spine committee"
+   ],
+   "aliases": [
+    "digital athlete"
+   ]
+  },
+  {
+   "id": "prevent",
+   "name": "Prevent Biometrics (mouthguard)",
+   "site": "https://preventbiometrics.com/",
+   "pubmed_authors": [],
+   "news": [
+    "Prevent Biometrics mouthguard",
+    "Prevent Biometrics concussion"
+   ],
+   "aliases": [
+    "prevent biometrics"
+   ]
+  },
+  {
+   "id": "biocore",
+   "name": "Biocore (biomechanics consulting / helmet testing)",
+   "site": "https://biocore.com/",
+   "pubmed_authors": [],
+   "news": [
+    "Biocore biomechanics helmet",
+    "Biocore NFL helmet laboratory testing"
+   ],
+   "aliases": [
+    "biocore"
+   ]
+  }
+ ],
+ "funding": {
+  "nih_days": 14,
+  "nih_text": [
+   {
+    "op": "or",
+    "text": "\"traumatic brain injury\" concussion neurotrauma \"head impact\" \"brain injury\" \"chronic traumatic encephalopathy\" \"blast injury\""
+   },
+   {
+    "op": "and",
+    "text": "\"finite element\" brain injury"
+   }
+  ],
+  "nsf_keywords": [
+   "brain injury",
+   "concussion",
+   "head impact"
+  ],
+  "grants_gov_keywords": [
+   "traumatic brain injury",
+   "concussion",
+   "neurotrauma",
+   "brain injury",
+   "head injury",
+   "blast injury"
+  ],
+  "news": [
+   "grant awarded traumatic brain injury research",
+   "NIH grant concussion research",
+   "funding concussion research",
+   "receives grant brain injury",
+   "wins award brain injury research",
+   "SBIR traumatic brain injury",
+   "CDMRP traumatic brain injury award",
+   "NFL funding concussion research grant",
+   "Department of Defense funding brain injury research",
+   "prize award concussion biomechanics",
+   "new center brain injury research funded"
+  ],
+  "nih_backfill_days": 75
+ }
 }
