@@ -25,6 +25,6 @@ python -m http.server -d docs 8000   # open http://localhost:8000
 ```
 
 ## Setup on GitHub
-1. Settings > Pages > Deploy from branch `main`, folder `/docs`.
+1. Settings > Pages > Source: GitHub Actions (the workflow deploys `docs/`).
 2. Settings > Actions > General > Workflow permissions: read and write.
 3. Actions tab > "Daily TBI newspaper" > Run workflow (optional first run).

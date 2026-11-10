@@ -4,9 +4,14 @@ on:
   schedule:
     - cron: "30 11 * * *"   # 11:30 UTC daily (about 6:30 am US Central)
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["docs/**", ".github/workflows/daily.yml"]
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: daily
@@ -16,6 +21,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Skip the data refresh on push events; only redeploy then.
+    if: github.event_name != 'push'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,3 +40,22 @@ jobs:
           git add -A data docs/data
           git diff --cached --quiet || git commit -m "Daily update $(date -u +%F)"
           git push
+
+  deploy:
+    needs: [build]
+    # Run after build, or alone on push events (when build is skipped).
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4
