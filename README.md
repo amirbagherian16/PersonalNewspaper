@@ -1,5 +1,7 @@
 # The TBI Daily
 
+**Live site: https://amirbagherian16.github.io/PersonalNewspaper/** (password protected)
+
 A personal, automatically updated newspaper on traumatic brain injury (TBI), focused on contact-sport head impact, biomechanics and simulation, with sections for blast and clinical TBI.
 
 **Cost: $0.** A scheduled GitHub Action runs once a day. It uses only the Python standard library and free public feeds. No LLM or paid API is called.
